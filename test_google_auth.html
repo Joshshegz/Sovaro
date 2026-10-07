@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sovaro – Google Auth Test</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; background: #f9f9f9; }
+    h1 { color: #1a1a1a; }
+    button { padding: 12px 24px; font-size: 16px; cursor: pointer; border: none; border-radius: 8px; background: #4285F4; color: white; margin-top: 20px; }
+    pre { background: #1a1a1a; color: #00ff88; padding: 20px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .label { font-weight: bold; color: #555; margin-top: 20px; display: block; }
+    .status { padding: 10px; border-radius: 6px; margin-top: 10px; }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+
+  <h1>🧪 Sovaro – Google Auth Test</h1>
+  <p>Click the button below to sign in with Google. This page will send your Google token to the Django backend and show the JWT response.</p>
+
+  <!-- Step 1: Google signs the user in and gives us an access_token -->
+  <button onclick="signInWithGoogle()">Continue with Google</button>
+
+  <div id="status"></div>
+
+  <span class="label" id="token-label" style="display:none">✅ Google Access Token (sent to Django):</span>
+  <pre id="google-token" style="display:none"></pre>
+
+  <span class="label" id="jwt-label" style="display:none">🔐 Django JWT Response:</span>
+  <pre id="jwt-response" style="display:none"></pre>
+
+  <!--
+    Google Identity Services SDK.
+    This is the official Google library for signing users in.
+  -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script>
+    // ─── CONFIGURATION ───────────────────────────────────────────────
+    // Paste your Google Client ID here (same one in your .env file)
+    const GOOGLE_CLIENT_ID = '752582798385-4jevo3imor03grao7q7pkeisnjrujtf6.apps.googleusercontent.com';
+
+    // Your Django backend URL
+    const DJANGO_BACKEND = 'http://localhost:8000';
+    // ─────────────────────────────────────────────────────────────────
+
+    function signInWithGoogle() {
+      // Step 1: Ask Google for an access_token using OAuth2 token flow
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email profile',
+        callback: handleGoogleToken,  // Step 2: When Google responds, call this function
+      });
+
+      client.requestAccessToken();
+    }
+
+    async function handleGoogleToken(tokenResponse) {
+      // tokenResponse.access_token is what Google gave us
+      const googleAccessToken = tokenResponse.access_token;
+
+      // Show the Google token on screen
+      document.getElementById('google-token').textContent = googleAccessToken;
+      document.getElementById('google-token').style.display = 'block';
+      document.getElementById('token-label').style.display = 'block';
+
+      showStatus('⏳ Sending token to Django...', '');
+
+      try {
+        // Step 2: Send the Google access_token to our Django backend
+        // Django will verify it with Google, find/create the user,
+        // and return our own JWT tokens.
+        const response = await fetch(`${DJANGO_BACKEND}/api/auth/google/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: googleAccessToken }),
+        });
+
+        const data = await response.json();
+
+        // Show the Django JWT response on screen
+        document.getElementById('jwt-response').textContent = JSON.stringify(data, null, 2);
+        document.getElementById('jwt-response').style.display = 'block';
+        document.getElementById('jwt-label').style.display = 'block';
+
+        if (response.ok) {
+          showStatus('✅ Success! Django returned JWT tokens. You are authenticated!', 'success');
+        } else {
+          showStatus('❌ Django returned an error. See response below.', 'error');
+        }
+
+      } catch (err) {
+        showStatus(`❌ Network error: ${err.message} — Is your Django server running?`, 'error');
+      }
+    }
+
+    function showStatus(message, type) {
+      const el = document.getElementById('status');
+      el.textContent = message;
+      el.className = `status ${type}`;
+    }
+  </script>
+
+</body>
+</html>

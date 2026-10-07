@@ -136,6 +136,9 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Use BigAutoField as the default primary key type (silences W042 warnings)
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
@@ -180,9 +183,11 @@ SIMPLE_JWT = {
 # Tells dj-rest-auth to return JWT tokens instead of the older session-based tokens.
 REST_AUTH = {
     'USE_JWT': True,
-    'JWT_AUTH_COOKIE': None,         # We use Authorization headers, not browser cookies
+    'JWT_AUTH_COOKIE': None,
     'JWT_AUTH_REFRESH_COOKIE': None,
-    'TOKEN_MODEL': None,             # Disables the old DRF token system — we use JWT only
+    'TOKEN_MODEL': None,
+    'JWT_AUTH_RETURN_EXPIRATION': True,   # Include token expiry time in response
+    'SESSION_LOGIN': False,                # Disable session login — JWT only
 }
 
 # django-allauth Configuration
