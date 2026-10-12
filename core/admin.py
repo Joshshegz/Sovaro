@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import BrandProfile, Competitor, SocialPost, GeneratedIdea
+from .models import BrandProfile, Competitor, SocialPost, GeneratedIdea, MonthlyReport
 
 
 @admin.register(BrandProfile)
@@ -27,3 +27,10 @@ class GeneratedIdeaAdmin(admin.ModelAdmin):
     list_display = ('title', 'target_platform', 'brand', 'created_at')
     list_filter = ('target_platform',)
     search_fields = ('title', 'hook')
+
+
+@admin.register(MonthlyReport)
+class MonthlyReportAdmin(admin.ModelAdmin):
+    list_display = ('brand', 'month_year', 'created_at')
+    list_filter = ('month_year',)
+    search_fields = ('brand__name', 'executive_summary')

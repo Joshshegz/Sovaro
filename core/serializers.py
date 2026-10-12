@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import BrandProfile, Competitor, SocialPost, GeneratedIdea
+from .models import BrandProfile, Competitor, SocialPost, GeneratedIdea, MonthlyReport
 
 
 class CompetitorSerializer(serializers.ModelSerializer):
@@ -75,3 +75,30 @@ class GeneratedIdeaSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+
+
+class MonthlyReportSerializer(serializers.ModelSerializer):
+    """Translates MonthlyReport instances to and from JSON."""
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
+
+    class Meta:
+        model = MonthlyReport
+        fields = [
+            'id',
+            'brand',
+            'brand_name',
+            'month_year',
+            'raw_metrics',
+            'executive_summary',
+            'key_insights',
+            'next_month_strategy',
+            'created_at',
+        ]
+        read_only_fields = [
+            'id',
+            'executive_summary',
+            'key_insights',
+            'next_month_strategy',
+            'created_at',
+        ]
+
