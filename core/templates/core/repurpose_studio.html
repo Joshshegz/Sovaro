@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Repurpose Studio · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-intro split"><div><p class="eyebrow">{{ brand.name|upper }} · REPURPOSE STUDIO</p><h1>One real idea. Multiple native assets.</h1><p>Preserve the thinking, rebuild the delivery, and remove generic AI copy before it reaches your audience.</p></div><span class="repurpose-brand-voice">Voice: {{ brand.tone_of_voice }}</span></section>
+
+<div class="repurpose-layout">
+  <section class="form-card repurpose-form-card"><div class="repurpose-step-head"><span>01</span><div><h2>Add the source</h2><p>Paste existing content or begin with one rough thought.</p></div></div>
+    <form method="post" class="repurpose-form" data-progress-mode="repurpose" data-repurpose-form>{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-alert">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="repurpose-mode">{{ form.mode }}{{ form.mode.errors }}</div>
+      <div class="repurpose-field">{{ form.source_title.label_tag }}{{ form.source_title }}{{ form.source_title.errors }}</div>
+      <div class="repurpose-field repurpose-source"><div class="field-label-row">{{ form.source_content.label_tag }}<span data-source-mode-label>ARTICLE, TRANSCRIPT, POST OR NOTES</span></div>{{ form.source_content }}<span class="helptext" data-source-help>{{ form.source_content.help_text }}</span>{{ form.source_content.errors }}</div>
+      <div class="repurpose-step-head compact"><span>02</span><div><h2>Choose the destinations</h2><p>Each draft will be rebuilt for the selected platform.</p></div></div>
+      <div class="platform-picker">{{ form.platforms }}{{ form.platforms.errors }}</div>
+      <div class="repurpose-options"><div class="repurpose-field">{{ form.objective.label_tag }}{{ form.objective }}{{ form.objective.errors }}</div><div class="repurpose-field">{{ form.desired_action.label_tag }}{{ form.desired_action }}{{ form.desired_action.errors }}</div></div>
+      <div class="repurpose-submit"><button type="submit">Build repurposed content <span aria-hidden="true">→</span></button></div>
+    </form>
+  </section>
+  <aside class="repurpose-guide"><p class="eyebrow">WHAT SOVARO DOES</p><h2>Extraction before generation.</h2><div><span>1</span><p><strong>Maps the source</strong>Thesis, insights, examples, claims and voice cues.</p></div><div><span>2</span><p><strong>Builds hook directions</strong>Five scored approaches instead of one random opening.</p></div><div><span>3</span><p><strong>Rewrites natively</strong>Different structure, rhythm and delivery for every platform.</p></div><div><span>4</span><p><strong>Runs quality checks</strong>Generic phrasing and unsupported numbers are surfaced for review.</p></div></aside>
+</div>
+
+{% if projects %}<section><div class="section-head"><div><p class="eyebrow">RECENT WORK</p><h2>Saved repurposing projects</h2></div></div><div class="repurpose-history">{% for item in projects %}<a href="{% url 'web:repurpose_detail' item.pk %}"><span>{{ item.get_mode_display }}</span><strong>{{ item.source_title|default:"Untitled content" }}</strong><small>{{ item.platforms|join:", " }} · {{ item.created_at|date:"M j, Y" }}</small></a>{% endfor %}</div></section>{% endif %}
+{% endblock %}

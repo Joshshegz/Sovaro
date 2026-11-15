@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Create your workspace · Sovaro{% endblock %}
+{% block content %}
+<section class="auth-layout signup-layout">
+  <aside class="auth-showcase signup-showcase">
+    <div class="auth-showcase-content">
+      <span class="auth-kicker">START WITH WHAT YOU KNOW</span>
+      <h1>Give every post a purpose.</h1>
+      <p>Create a strategy around your real goals, audience, budget, and available time.</p>
+      <ol class="onboarding-steps">
+        <li><span>1</span><div><strong>Add your brand</strong><p>Tell Sovaro what you sell and who you want to reach.</p></div></li>
+        <li><span>2</span><div><strong>Build your strategy</strong><p>Get focused pillars, platforms, KPIs, and a realistic schedule.</p></div></li>
+        <li><span>3</span><div><strong>Learn from results</strong><p>Turn monthly performance into the next useful action.</p></div></li>
+      </ol>
+    </div>
+    <div class="auth-proof"><span>✓</span><p><strong>Start without an agency budget.</strong>The free starter strategy works without your own AI key.</p></div>
+  </aside>
+  <div class="auth-form-panel signup-form-panel">
+    <div class="auth-form-copy"><p class="eyebrow">CREATE YOUR ACCOUNT</p><h2>Start your free workspace</h2><p>Set up your account, then add your first brand.</p></div>
+    <form method="post" class="auth-form">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-alert" role="alert"><strong>Check the details below.</strong>{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}<div class="auth-field"><div class="field-label-row">{{ field.label_tag }}{% if field.name == 'email' %}<span>Used to sign in</span>{% endif %}</div>{% if field.name == 'password1' or field.name == 'password2' %}<div class="password-input">{{ field }}<button type="button" class="password-toggle" data-password-toggle aria-label="Show {{ field.label|lower }}" aria-pressed="false"><span class="eye-open" aria-hidden="true">◉</span><span class="eye-closed" aria-hidden="true">—</span><span class="toggle-text">Show</span></button></div>{% else %}{{ field }}{% endif %}{% if field.help_text %}<div class="field-help {% if field.name == 'password1' %}password-rules{% endif %}">{{ field.help_text|safe }}</div>{% endif %}{% if field.errors %}<div class="field-error">{{ field.errors|striptags }}</div>{% endif %}</div>{% endfor %}
+      <button class="auth-submit" type="submit">Create workspace <span aria-hidden="true">→</span></button>
+    </form>
+    <div class="auth-switch"><span>Already have an account?</span><a href="{% url 'web:login' %}">Sign in</a></div>
+    <p class="auth-privacy">By continuing, you agree to use Sovaro responsibly.</p>
+  </div>
+</section>
+{% endblock %}

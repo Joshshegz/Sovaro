@@ -25,7 +25,8 @@ SECRET_KEY = "django-insecure-tocl9ww&n5tj6$dz0zcy1e9u+=c-7pmmgof0xi8!4fo_^07w+3
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# Local development hosts. Production should set this from the deployment environment.
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 
 # Application definition
@@ -37,27 +38,11 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Required by django-allauth
-    "django.contrib.sites",
-    # Third-party apps
-    "rest_framework",
-    "corsheaders",
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
-    "allauth.socialaccount.providers.google",  # The Google provider specifically
-    "dj_rest_auth",
-    "dj_rest_auth.registration",
     # Local apps
     "core",
 ]
 
-# django.contrib.sites requires a SITE_ID.
-# Think of it as: "this is website #1 in our database."
-SITE_ID = 1
-
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -65,8 +50,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # Required by django-allauth
-    "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -118,6 +101,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+LOGIN_URL = "web:login"
+LOGIN_REDIRECT_URL = "web:dashboard"
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
@@ -135,6 +121,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # Use BigAutoField as the default primary key type (silences W042 warnings)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -148,75 +136,5 @@ MAILERS = {
         "BACKEND": "django.core.mail.backends.console.EmailBackend",
     },
 }
-
-# CORS Configuration
-# During development, this allows your frontend friend (running on localhost:3000, 5173, etc.)
-# to send API requests to Django without being blocked by the browser.
-CORS_ALLOW_ALL_ORIGINS = True
-
-# Django REST Framework Configuration
-# This tells DRF: "By default, every API endpoint requires a valid JWT token."
-# Think of it as the bouncer rule — no wristband, no entry.
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-}
-
-# JWT Token Settings
-# ACCESS_TOKEN_LIFETIME: The wristband expires after 1 hour.
-# REFRESH_TOKEN_LIFETIME: The backup stamp lasts 7 days.
-from datetime import timedelta
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,       # Issue a new refresh token each time one is used
-    'BLACKLIST_AFTER_ROTATION': True,    # Old refresh tokens become invalid after rotation
-    'AUTH_HEADER_TYPES': ('Bearer',),    # Frontend sends: "Authorization: Bearer <token>"
-}
-
-# REST_AUTH Configuration
-# Tells dj-rest-auth to return JWT tokens instead of the older session-based tokens.
-REST_AUTH = {
-    'USE_JWT': True,
-    'JWT_AUTH_COOKIE': None,
-    'JWT_AUTH_REFRESH_COOKIE': None,
-    'TOKEN_MODEL': None,
-    'JWT_AUTH_RETURN_EXPIRATION': True,   # Include token expiry time in response
-    'SESSION_LOGIN': False,                # Disable session login — JWT only
-}
-
-# django-allauth Configuration
-# ACCOUNT_EMAIL_VERIFICATION: Skip email verification during development.
-# You can set this to 'mandatory' later when you add an email service (like SendGrid).
-ACCOUNT_EMAIL_VERIFICATION = 'none'
-# New allauth v65+ syntax (replaces deprecated individual settings)
-ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-
-# Google OAuth2 Provider Configuration
-# These values come from your Google Cloud Console.
-# We load them from a .env file so they are NEVER hardcoded in the source code.
-import os
-from dotenv import load_dotenv
-load_dotenv()
-
-SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'SCOPE': ['profile', 'email'],
-        'AUTH_PARAMS': {'access_type': 'online'},
-        'APP': {
-            'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
-            'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
-            'key': '',
-        },
-        'FETCH_USERINFO': True,
-    }
-}
-
 
 

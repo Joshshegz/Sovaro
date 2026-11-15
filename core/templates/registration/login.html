@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Sign in · Sovaro{% endblock %}
+{% block content %}
+<section class="auth-layout">
+  <aside class="auth-showcase">
+    <div class="auth-showcase-content">
+      <span class="auth-kicker">YOUR STRATEGY WORKSPACE</span>
+      <h1>Pick up where your plan left off.</h1>
+      <p>Return to your brand strategies, post ideas, and monthly reports in one focused workspace.</p>
+      <div class="auth-preview" aria-hidden="true">
+        <div class="auth-preview-head"><span class="mini-logo">S</span><div><small>ACTIVE WORKSPACE</small><strong>Astra Threads</strong></div><span class="pill success-pill">On track</span></div>
+        <div class="auth-preview-grid"><div><small>STRATEGY</small><strong>8 sections</strong><span>Ready to review</span></div><div><small>POST IDEAS</small><strong>30 ideas</strong><span>Mapped to pillars</span></div></div>
+        <div class="auth-preview-next"><span>Next action</span><strong>Review this month's results</strong><i>→</i></div>
+      </div>
+    </div>
+    <div class="auth-proof"><span>✓</span><p><strong>Clear decisions, saved in one place.</strong>No rebuilding the strategy every time you sit down to post.</p></div>
+  </aside>
+  <div class="auth-form-panel">
+    <div class="auth-form-copy"><p class="eyebrow">WELCOME BACK</p><h2>Sign in to Sovaro</h2><p>Continue building a social media system that fits your business.</p></div>
+    <form method="post" class="auth-form">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-alert" role="alert"><strong>We couldn't sign you in.</strong>{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}<div class="auth-field"><div class="field-label-row">{{ field.label_tag }}</div>{% if field.name == 'password' %}<div class="password-input">{{ field }}<button type="button" class="password-toggle" data-password-toggle aria-label="Show password" aria-pressed="false"><span class="eye-open" aria-hidden="true">◉</span><span class="eye-closed" aria-hidden="true">—</span><span class="toggle-text">Show</span></button></div>{% else %}{{ field }}{% endif %}{% if field.errors %}<div class="field-error">{{ field.errors|striptags }}</div>{% endif %}</div>{% endfor %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button class="auth-submit" type="submit">Sign in <span aria-hidden="true">→</span></button>
+    </form>
+    <div class="auth-switch"><span>New to Sovaro?</span><a href="{% url 'web:signup' %}">Create your free workspace</a></div>
+    <p class="auth-privacy">Your workspace data stays tied to your account.</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Account Settings · Sovaro{% endblock %}
+{% block content %}
+<section class="page-intro split"><div><p class="eyebrow">ACCOUNT SETTINGS</p><h1>Your account, your controls.</h1><p>Manage the details you use to sign in and keep your account secure.</p></div><span class="settings-account-pill">{{ brand_count }} brand{{ brand_count|pluralize }} in this workspace</span></section>
+<div class="settings-grid">
+  <section class="form-card settings-card"><div class="settings-card-head"><span aria-hidden="true">01</span><div><h2>Profile details</h2><p>These details identify you across the workspace.</p></div></div><form method="post" class="stack">{% csrf_token %}<input type="hidden" name="action" value="account">{{ account_form.as_div }}<button type="submit">Save account details</button></form></section>
+  <section class="form-card settings-card"><div class="settings-card-head"><span aria-hidden="true">02</span><div><h2>Change password</h2><p>Use a strong password you do not reuse elsewhere.</p></div></div><form method="post" class="stack">{% csrf_token %}<input type="hidden" name="action" value="password">{{ password_form.as_div }}<button type="submit">Update password</button></form></section>
+  <section class="settings-preference-card"><div class="settings-card-head"><span aria-hidden="true">03</span><div><h2>Appearance</h2><p>Sovaro remembers your preferred theme on this device.</p></div></div><div class="preference-row"><div><strong>Light or dark mode</strong><span>Use the sun and moon control in the top bar.</span></div><button class="theme-toggle settings-theme-toggle" type="button" data-theme-toggle aria-label="Switch colour theme" aria-pressed="false"><span class="theme-sun" aria-hidden="true">☀</span><span class="theme-moon" aria-hidden="true">☾</span></button></div></section>
+</div>
+{% endblock %}

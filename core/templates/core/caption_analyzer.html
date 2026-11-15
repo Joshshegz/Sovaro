@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Caption Coach · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-intro"><p class="eyebrow">{{ brand.name|upper }} · CAPTION COACH</p><h1>Understand the writing—not just the score.</h1><p>Paste a LinkedIn post, Instagram caption, TikTok caption or any social copy. Sovaro explains what may hold attention, what weakens it, and how to improve it without inventing performance.</p></section>
+
+<div class="caption-coach-layout">
+  <section class="form-card caption-input-card">
+    <div class="repurpose-step-head"><span>01</span><div><h2>Add the post</h2><p>Include the opening, body and call to action.</p></div></div>
+    <form method="post" class="caption-form" data-progress-mode="caption">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-alert">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="repurpose-field">{{ form.platform.label_tag }}{{ form.platform }}{{ form.platform.errors }}</div>
+      <div class="repurpose-field">{{ form.caption.label_tag }}{{ form.caption }}<span class="helptext">{{ form.caption.help_text }}</span>{{ form.caption.errors }}</div>
+      <div class="repurpose-field evidence-field"><div><span class="optional-label">OPTIONAL EVIDENCE</span>{{ form.performance_context.label_tag }}</div>{{ form.performance_context }}<span class="helptext">{{ form.performance_context.help_text }}</span>{{ form.performance_context.errors }}</div>
+      <button type="submit">Analyze this caption <span aria-hidden="true">→</span></button>
+    </form>
+  </section>
+  <aside class="caption-truth-card"><p class="eyebrow">WHAT SOVARO CAN PROVE</p><h2>Strong writing is not the same as proven performance.</h2><p>Without metrics, the coach explains why the post <em>may</em> be effective. Add real results and it can interpret likely contributors—never guaranteed causes.</p><div><strong>Writing evidence</strong><span>Hook, structure, specificity, proof, pacing and CTA.</span></div><div><strong>Performance evidence</strong><span>Impressions, retention, saves, comments, clicks and conversions.</span></div></aside>
+</div>
+
+{% if analysis %}
+<section class="caption-analysis-head"><div><p class="eyebrow">{{ analysis.verdict_label }}</p><h2>{{ analysis.summary }}</h2><p>{{ analysis.performance_interpretation }}</p></div><span class="pill">{% if analysis.analysis_mode == 'ai_coach' %}AI coaching review{% else %}Basic structural review{% endif %}</span></section>
+
+<section><div class="section-head"><div><p class="eyebrow">SCORECARD</p><h2>Five writing signals</h2><p class="muted">Coaching signals out of 5—not predictions of reach.</p></div></div><div class="caption-score-grid">{% for label, score in analysis.scorecard.items %}<article><span>{{ label }}</span><strong>{{ score }}<small>/5</small></strong><div><i style="width:{% widthratio score 5 100 %}%"></i></div></article>{% endfor %}</div></section>
+
+<section class="caption-learning-grid"><article class="card caption-hook-card"><p class="eyebrow">THE HOOK</p><h2>{{ analysis.hook.type }}</h2><p>{{ analysis.hook.why_it_may_work }}</p><div class="caption-risk"><strong>Watch out</strong>{{ analysis.hook.risk }}</div></article><article class="card"><p class="eyebrow">PURPOSE & PLATFORM FIT</p><h2>What the post is doing</h2><p>{{ analysis.purpose }}</p><p>{{ analysis.platform_fit }}</p></article></section>
+
+<section class="caption-feedback-grid"><article><p class="eyebrow">KEEP</p><h2>What strengthens it</h2><ul>{% for item in analysis.strengths %}<li>{{ item }}</li>{% endfor %}</ul></article><article><p class="eyebrow">FIX</p><h2>What weakens it</h2><ul>{% for item in analysis.weaknesses %}<li>{{ item }}</li>{% endfor %}</ul></article><article><p class="eyebrow">TRY NEXT</p><h2>Specific improvements</h2><ol>{% for item in analysis.improvements %}<li>{{ item }}</li>{% endfor %}</ol></article></section>
+
+<section class="caption-rewrite"><header><div><p class="eyebrow">COACHED REWRITE</p><h2>A stronger version</h2></div><button type="button" data-copy-text="caption-rewrite-copy">Copy rewrite</button></header><div id="caption-rewrite-copy">{{ analysis.rewrite|linebreaksbr }}</div><footer>{% for note in analysis.rewrite_notes %}<span>{{ note }}</span>{% endfor %}</footer></section>
+{% endif %}
+<script>document.addEventListener('click',function(e){var b=e.target.closest('[data-copy-text]');if(!b)return;var n=document.getElementById(b.dataset.copyText);navigator.clipboard.writeText(n.innerText).then(function(){b.textContent='Copied';});});</script>
+{% endblock %}

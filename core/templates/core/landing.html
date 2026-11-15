@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Sovaro · Social media strategy that leads to action{% endblock %}
+{% block content %}
+<section class="landing-hero">
+  <div class="landing-hero-copy">
+    <span class="announcement"><span>NEW</span> Strategy, ideas and reporting in one workspace</span>
+    <p class="eyebrow">SOCIAL MEDIA, WITH A REASON</p>
+    <h1>Stop guessing what to post.</h1>
+    <p class="landing-lead">Sovaro turns what you know about your brand into a focused social media strategy, useful post ideas, and monthly reports that explain what to do next.</p>
+    <div class="actions"><a class="button landing-primary" href="{% url 'web:signup' %}">Build your free strategy <span aria-hidden="true">→</span></a><a class="button secondary" href="#product">See how it works</a></div>
+    <p class="hero-note">No agency budget required. Start with the information you already have.</p>
+  </div>
+  <div class="product-stage" aria-label="Illustration of the Sovaro strategy workspace">
+    <div class="stage-glow"></div>
+    <div class="product-window">
+      <div class="product-window-bar"><span class="mini-logo">S</span><span>Sovaro workspace</span><span class="window-dots">•••</span></div>
+      <div class="product-window-body">
+        <aside class="mock-sidebar"><strong>Workspace</strong><span class="active">Overview</span><span>Strategy</span><span>Post ideas</span><span>Reports</span></aside>
+        <div class="mock-main">
+          <div class="mock-heading"><div><small>ASTRA THREADS</small><strong>Your social strategy</strong></div><span class="ready-dot">Draft ready</span></div>
+          <div class="mock-goal"><small>90-DAY GOAL</small><strong>Turn social attention into qualified enquiries</strong><div class="progress-line"><i></i></div></div>
+          <div class="mock-grid"><div><span class="mock-icon purple">◎</span><small>AUDIENCE</small><strong>Style-conscious makers</strong><p>Clear needs and search language</p></div><div><span class="mock-icon blue">▤</span><small>CONTENT PILLARS</small><strong>4 focused themes</strong><p>Mapped to the customer journey</p></div><div><span class="mock-icon coral">↗</span><small>WEEKLY PLAN</small><strong>3 useful posts</strong><p>Built around available time</p></div></div>
+          <div class="mock-bottom"><div><small>NEXT ACTION</small><strong>Review your first four-week plan</strong></div><span>Open strategy →</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="floating-card floating-one"><span>✦</span><div><small>POST IDEA</small><strong>Ready to review</strong></div></div>
+    <div class="floating-card floating-two"><span>↗</span><div><small>MONTHLY REPORT</small><strong>Results explained</strong></div></div>
+  </div>
+</section>
+
+<section class="trust-strip" aria-label="Product principles"><span>Built for real businesses</span><div>Strategy before posting</div><div>Human review built in</div><div>Useful without an AI key</div><div>First-month baselines</div></section>
+
+<section class="landing-section problem-section" id="product">
+  <div class="section-copy"><p class="eyebrow">FROM RANDOM POSTS TO A WORKING SYSTEM</p><h2>Your social media work should connect.</h2><p>A strategy sitting in one document, ideas in another tool, and results in a spreadsheet creates more work. Sovaro keeps the decisions connected from the first brief to the next month's plan.</p></div>
+  <div class="problem-grid">
+    <article><span class="feature-number">01</span><h3>Start with the brand</h3><p>Capture the goal, audience, customer language, budget, time, and any evidence you already have.</p></article>
+    <article><span class="feature-number">02</span><h3>Make the plan usable</h3><p>Get content pillars, channel priorities, a realistic cadence, KPIs, and four weeks of concrete tactics.</p></article>
+    <article><span class="feature-number">03</span><h3>Learn every month</h3><p>Compare verified results, review top posts, record competitor observations, and decide what to repeat or test.</p></article>
+  </div>
+</section>
+
+<section class="landing-section workflow-section" id="workflow">
+  <div class="section-heading-centred"><p class="eyebrow">ONE WORKSPACE, ONE CLEAR LOOP</p><h2>Plan. Create. Learn. Repeat.</h2><p>Each part of Sovaro feeds the next, so a strategy becomes work you can actually do.</p></div>
+  <div class="workflow-grid">
+    <article><div class="workflow-visual brief-visual"><span>GOAL</span><strong>More qualified enquiries</strong><i></i><span>AUDIENCE</span><strong>Independent business owners</strong><i></i><span>CAPACITY</span><strong>3 posts per week</strong></div><div class="workflow-copy"><span>1</span><h3>Build the brief</h3><p>Add what you know. Sovaro clearly marks missing evidence and assumptions that still need checking.</p></div></article>
+    <article><div class="workflow-visual strategy-visual"><div><small>Content pillar</small><strong>Teach the problem</strong><em>35%</em></div><div><small>Content pillar</small><strong>Show the process</strong><em>30%</em></div><div><small>Content pillar</small><strong>Build trust</strong><em>25%</em></div></div><div class="workflow-copy"><span>2</span><h3>Turn it into a strategy</h3><p>Connect goals, audience, platforms, content pillars, cadence, content mix, KPIs, and tactics.</p></div></article>
+    <article><div class="workflow-visual report-visual"><div class="report-stat"><small>REACH</small><strong>12,480</strong><span>+18%</span></div><div class="tiny-bars"><i style="height:34%"></i><i style="height:51%"></i><i style="height:43%"></i><i style="height:74%"></i><i style="height:88%"></i></div><p><b>Next:</b> Repeat the strongest topic and test a clearer call to action.</p></div><div class="workflow-copy"><span>3</span><h3>Report and improve</h3><p>Create an editable six-part monthly report with measured changes and a practical next-month plan.</p></div></article>
+  </div>
+</section>
+
+<section class="landing-section audience-section" id="who-it-is-for">
+  <div class="audience-copy"><p class="eyebrow">BUILT FOR THE PERSON DOING THE WORK</p><h2>Professional enough for a client. Simple enough for a founder.</h2><p>Sovaro uses familiar industry language and explains the decisions behind the plan, so you can work with or without a social media manager.</p><div class="audience-list"><div><span>✓</span><p><strong>Founders and small teams</strong>Build a credible starting plan without paying for a full agency engagement.</p></div><div><span>✓</span><p><strong>Freelance social media managers</strong>Move from intake to strategy, ideas, and reports with fewer repeated steps.</p></div><div><span>✓</span><p><strong>Growing agencies</strong>Create a consistent foundation that can still reflect each client's goals and audience.</p></div></div></div>
+  <div class="audience-panel"><div class="panel-top"><span class="pill success-pill">Ready to share</span><small>OCTOBER REPORT</small></div><h3>The story behind the numbers</h3><div class="panel-metric"><span>Link clicks</span><strong>246</strong><em>+21%</em></div><div class="panel-divider"></div><small>WHAT WE LEARNED</small><p>Practical tutorials earned the most qualified visits. Next month, repeat the format with a stronger offer.</p><div class="panel-next"><span>Next month's plan</span><strong>3 themes · 1 experiment · 1 KPI</strong></div></div>
+</section>
+
+<section class="landing-cta"><div><p class="eyebrow">YOUR NEXT POST SHOULD HAVE A PURPOSE</p><h2>Build the strategy behind it.</h2><p>Start with your brand, your audience, and the time you actually have.</p></div><div><a class="button" href="{% url 'web:signup' %}">Create your free workspace →</a><span>Already have an account? <a href="{% url 'web:login' %}">Sign in</a></span></div></section>
+
+<footer class="landing-footer"><a class="logo" href="{% url 'web:home' %}"><span class="logo-mark">S</span><span>Sovaro<span class="logo-dot">.</span></span></a><p>Social media strategy that leads to action.</p><div><a href="{% url 'web:login' %}">Sign in</a><a href="{% url 'web:signup' %}">Start free</a></div><small>© {% now "Y" %} Sovaro</small></footer>
+{% endblock %}

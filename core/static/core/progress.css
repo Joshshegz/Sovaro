@@ -1,0 +1,15 @@
+.progress-open{overflow:hidden}
+.progress-overlay[hidden]{display:none}
+.progress-overlay{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:rgba(17,23,43,.72);backdrop-filter:blur(5px)}
+.progress-card{width:min(100%,520px);max-height:calc(100vh - 48px);overflow:auto;background:#fff;border-radius:18px;padding:32px;box-shadow:0 24px 70px rgba(17,23,43,.22)}
+.progress-card h2{font-size:clamp(1.7rem,4vw,2.3rem);line-height:1.15;letter-spacing:-.04em;margin:0 0 10px}
+.progress-card h2:focus{outline:none}
+.progress-card>p:not(.eyebrow){color:#64748b;margin:0 0 18px}
+.progress-track{height:10px;overflow:hidden;border-radius:999px;background:#e9e8fb;margin:28px 0 22px}
+.progress-motion{display:block;width:38%;height:100%;border-radius:999px;background:#5446e8;animation:progress-sweep 1.8s ease-in-out infinite alternate}
+.progress-card .progress-tip{min-height:3em;color:#172033!important;font-weight:600}
+.progress-card .progress-source{font-size:.84rem;margin-top:-10px!important}
+.progress-source a{color:#5446e8}
+.progress-card .small{font-size:.85rem;margin-bottom:0!important}
+@keyframes progress-sweep{from{transform:translateX(-105%)}to{transform:translateX(270%)}}
+@media(prefers-reduced-motion:reduce){.progress-motion{animation:none;width:100%;opacity:.65}}

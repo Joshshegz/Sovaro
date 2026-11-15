@@ -1,20 +1,12 @@
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
+    path('', include(('core.web_urls', 'web'), namespace='web')),
     path('admin/', admin.site.urls),
-
-    # Standard JWT auth (email + password login & token refresh)
-    path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
-    # dj-rest-auth handles: logout, password change, user detail
-    path('api/auth/', include('dj_rest_auth.urls')),
-
-    # Registration + Google OAuth social login
-    path('api/auth/', include('core.auth_urls')),
-
-    # All core app endpoints (brands, competitors, posts, ideas)
-    path('api/', include('core.urls')),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

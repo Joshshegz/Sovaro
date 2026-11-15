@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Add a brand · Sovaro{% endblock %}
+{% block content %}
+<section class="page-intro split"><div><p class="eyebrow">BRAND SETUP</p><h1>Add your brand</h1><p>Give Sovaro enough context to build a strategy around your real business, audience and capacity.</p></div><a class="button secondary" href="{% url 'web:dashboard' %}">Back to overview</a></section>
+
+<section class="brand-form-layout">
+  <div class="form-card brand-form-card">
+    <div class="brand-progress" data-brand-progress>
+      <div class="brand-progress-copy"><div><span>Brand profile</span><small data-progress-detail>0 essential details added</small></div><strong data-progress-label>0% complete</strong></div>
+      <div class="brand-progress-track" role="progressbar" aria-label="Brand setup progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i data-progress-bar></i></div>
+    </div>
+    <div class="form-section-heading"><span>01</span><div><h2>Business and audience details</h2><p>Required fields build the strategy foundation. Optional fields improve the calls to action and brand guardrails.</p></div></div>
+    <form method="post" class="brand-setup-form" data-brand-form data-audience-url="{% url 'web:audience_suggestion' %}">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-alert full-field" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}<div class="brand-field field-{{ field.name }}{% if not field.field.required %} optional-field{% endif %}"><div class="field-label-row">{{ field.label_tag }}{% if not field.field.required %}<span>Optional</span>{% endif %}</div>{{ field }}{% if field.name == 'target_audience' %}<div class="audience-assistant"><div><strong>Not sure who to describe?</strong><span>Use your industry, business model and goal to draft an audience hypothesis.</span></div><button type="button" class="button secondary audience-suggest-button" data-audience-suggest><span aria-hidden="true">✦</span> Suggest with AI</button></div><div class="audience-suggestion-status" data-audience-status aria-live="polite"></div>{% endif %}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}{% if field.errors %}<div class="field-error">{{ field.errors|striptags }}</div>{% endif %}</div>{% endfor %}
+      <div class="brand-form-actions full-field"><div><strong>Next: build the strategy brief</strong><span>You can change these details later.</span></div><button type="submit">Save brand and continue <span aria-hidden="true">→</span></button></div>
+    </form>
+  </div>
+  <aside class="brand-form-guide">
+    <p class="eyebrow">A STRONGER INPUT MAKES A STRONGER PLAN</p><h2>What should you write?</h2>
+    <div class="guide-item"><span>1</span><div><strong>Be specific about the audience</strong><p>Describe their situation, needs and buying concerns instead of writing “everyone.”</p></div></div>
+    <div class="guide-item"><span>2</span><div><strong>Choose a business result</strong><p>Enquiries, bookings, sales or qualified website visits give the strategy a useful direction.</p></div></div>
+    <div class="guide-item"><span>3</span><div><strong>Use your real capacity</strong><p>The posting recommendation should fit the time you can consistently give it.</p></div></div>
+    <div class="guide-note"><span>✦</span><p><strong>Starting from scratch?</strong>That is fine. Sovaro will mark the assumptions that need testing.</p></div>
+  </aside>
+</section>
+{% endblock %}
