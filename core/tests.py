@@ -1,16 +1,51 @@
 import json
+import os
 import tempfile
+from types import SimpleNamespace
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from .models import BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
 from .content_gap_service import research_content_gaps
-from .ai_service import clean_and_normalize_strategy
+from .ai_service import clean_and_normalize_strategy, generate_with_fallback
 from .strategy_service import generate_starter_strategy
+
+
+class AIProviderFallbackTests(TestCase):
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "gemini-test", "GROQ_API_KEY": "groq-test"}, clear=False)
+    @patch("core.ai_service.requests.post")
+    @patch("core.ai_service.get_gemini_client", side_effect=RuntimeError("Gemini quota exhausted"))
+    def test_groq_is_used_when_gemini_is_unavailable(self, _gemini, post):
+        groq_response = Mock()
+        groq_response.raise_for_status.return_value = None
+        groq_response.json.return_value = {
+            "choices": [{"message": {"content": '{"status":"ok"}'}}]
+        }
+        post.return_value = groq_response
+
+        response = generate_with_fallback("Return JSON with a status field.")
+
+        self.assertEqual(response.text, '{"status":"ok"}')
+        self.assertEqual(response.provider, "groq")
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "openai/gpt-oss-120b")
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "gemini-test", "GROQ_API_KEY": "groq-test"}, clear=False)
+    @patch("core.ai_service.requests.post")
+    @patch("core.ai_service.get_gemini_client")
+    def test_gemini_remains_the_primary_provider(self, get_client, post):
+        generated = SimpleNamespace(text='{"provider":"gemini"}')
+        client = Mock()
+        client.models.generate_content.return_value = generated
+        get_client.return_value = client
+
+        response = generate_with_fallback("Return JSON.")
+
+        self.assertIs(response, generated)
+        post.assert_not_called()
 
 
 class BrowserWorkflowTests(TestCase):

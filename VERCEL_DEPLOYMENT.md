@@ -10,6 +10,8 @@ Vercel detects this Django project from `manage.py` and serves it through `confi
 - `DJANGO_CSRF_TRUSTED_ORIGINS`: HTTPS origins, for example `https://sovaro.vercel.app,https://*.vercel.app`.
 - `DATABASE_URL`: a persistent PostgreSQL connection string. Do not use SQLite in production.
 - `GEMINI_API_KEY`: required for the current AI features.
+- `GROQ_API_KEY`: recommended fallback when Gemini is unavailable or out of quota.
+- `GROQ_MODEL`: optional; defaults to `openai/gpt-oss-120b`.
 - `AI_REQUEST_TIMEOUT_MS`: optional; defaults to `20000` milliseconds per model attempt.
 
 ## Before production traffic

@@ -1,6 +1,9 @@
 import os
 import re
 import json
+import logging
+from types import SimpleNamespace
+
 import requests
 from bs4 import BeautifulSoup
 from google import genai
@@ -8,6 +11,8 @@ from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 def extract_json_from_llm(text):
@@ -287,42 +292,68 @@ def get_gemini_client():
     )
 
 
+def _generate_with_groq(prompt):
+    """Generate a JSON response through Groq's OpenAI-compatible API."""
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY is not configured on the server.")
+
+    timeout_seconds = max(1, int(os.getenv("AI_REQUEST_TIMEOUT_MS", "20000")) / 1000)
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"},
+        },
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    content = (((payload.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    if not content:
+        raise ValueError("Groq returned an empty response.")
+    return SimpleNamespace(text=content, provider="groq")
+
+
 def generate_with_fallback(prompt):
     """
-    Tries each model in GEMINI_MODELS in order.
-    Falls back to the next model on:
-      - 503 / UNAVAILABLE  (model overloaded)
-      - 404 / NOT_FOUND    (model not available on this key)
-      - 429 / RESOURCE_EXHAUSTED (daily/minute quota exceeded)
-    Raises immediately on bad API key, bad prompt, or any other unrecoverable error.
-    Raises only if ALL models fail.
+    Use Gemini first, then Groq, while preserving the same `.text` response API.
+
+    Provider failures are logged privately for diagnosis. Callers still control the
+    user-facing fallback so keys, quotas, and provider details are never exposed.
     """
-    client = get_gemini_client()
-    last_error = None
+    errors = []
 
-    for model in GEMINI_MODELS:
+    if os.getenv("GEMINI_API_KEY"):
         try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-            )
-            return response  # Success — return immediately
-        except Exception as e:
-            error_str = str(e)
-            # Retry on availability/quota errors only
-            if any(code in error_str for code in [
-                "503", "404", "429",
-                "UNAVAILABLE", "NOT_FOUND", "RESOURCE_EXHAUSTED",
-                "quota", "overloaded"
-            ]):
-                last_error = e
-                continue  # Try next model
-            raise  # Any other error (bad API key, invalid request) — raise immediately
+            client = get_gemini_client()
+            for model in GEMINI_MODELS:
+                try:
+                    return client.models.generate_content(model=model, contents=prompt)
+                except Exception as exc:
+                    errors.append((f"gemini:{model}", exc))
+                    logger.warning("AI provider failed: gemini model=%s error=%s", model, type(exc).__name__)
+        except Exception as exc:
+            errors.append(("gemini:client", exc))
+            logger.warning("AI provider setup failed: gemini error=%s", type(exc).__name__)
 
-    raise Exception(
-        f"All Gemini models are currently unavailable or quota-exhausted. "
-        f"Last error: {last_error}"
-    )
+    if os.getenv("GROQ_API_KEY"):
+        try:
+            return _generate_with_groq(prompt)
+        except Exception as exc:
+            errors.append(("groq", exc))
+            logger.warning("AI provider failed: groq error=%s", type(exc).__name__)
+
+    if not errors:
+        raise ValueError("No AI provider is configured. Set GEMINI_API_KEY or GROQ_API_KEY.")
+
+    providers = ", ".join(name for name, _ in errors)
+    raise RuntimeError(f"All configured AI providers were unavailable ({providers}).")
 
 
 
