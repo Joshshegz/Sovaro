@@ -4,6 +4,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,7 +46,7 @@ def extract_json_from_llm(text):
     raise ValueError(f"Could not parse valid JSON from AI response: {text[:200]}...")
 
 
-def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platforms=None, requested_p_day=None):
+def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platforms=None, requested_p_day=None, requested_posts_per_week=None, strategy_inputs=None):
     """
     POST-GENERATION VALIDATION & NORMALIZATION PIPELINE:
     Guarantees product-quality and operational consistency:
@@ -89,6 +90,8 @@ def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platform
             for i, p in enumerate(pillars):
                 p["percentage_of_content"] = f"{normalized[i]}%"
 
+    evidence = strategy_inputs or {}
+
     # --- 2. Claim & Evidence Classification Engine for Content Ideas ---
     ideas = raw_data.get("content_ideas") or []
     if isinstance(ideas, list):
@@ -96,6 +99,13 @@ def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platform
             r'\b(we spent|we tested|we scaled|we reduced|in our tests|in production for \d+|we built a system that generated \$\d+|we audited \d+|after testing \d+)\b',
             re.IGNORECASE
         )
+        unsupported_proof_regex = re.compile(
+            r'\b(customer spotlight|customer story|client story|testimonial|case study|local (?:family|nurse|driver|business)|'
+            r'zero hidden fees|\$0 fees?|no[- ]hide policy|only \d+ spots?|\d+\+?[- ]point|in under \d+|our inspection|'
+            r'our tests?|every (?:vehicle|car|product)|we (?:helped|sold|saved|increased|reduced))\b',
+            re.IGNORECASE,
+        )
+        supplied_proof = str(evidence.get("proof_available") or "").lower()
 
         for idea in ideas:
             hook = idea.get("hook", "")
@@ -119,6 +129,18 @@ def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platform
                 else:
                     idea["claim_classification"] = "educational"
                     idea["evidence_note"] = "Authoritative educational insight."
+
+            unsupported_match = unsupported_proof_regex.search(full_text)
+            claim_is_confirmed = bool(unsupported_match and unsupported_match.group(0).lower() in supplied_proof)
+            if unsupported_match and not claim_is_confirmed:
+                idea["claim_classification"] = "evidence_required"
+                idea["evidence_note"] = "Do not publish until the brand supplies a real, permissioned example and verifies every claim."
+                idea["concept"] = (
+                    "Evidence needed: collect a real customer or operational example, obtain permission, and replace "
+                    "all placeholder details with verified facts before developing this post."
+                )
+                idea["hook"] = "What should a customer verify before making this decision?"
+                idea["publish_status"] = "blocked_pending_evidence"
 
 # Core asset vs adapted asset classification
             if not idea.get("asset_type"):
@@ -167,8 +189,76 @@ def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platform
 
     # --- 4. Audience Segment Tagging ---
     icp = raw_data.get("audience_icp_dossier") or {}
-    if isinstance(icp, dict) and not icp.get("evidence_basis"):
-        icp["evidence_basis"] = "Derived from brand profile and market positioning (assumptions to be calibrated with CRM data)"
+    raw_data["audience_icp_dossier"] = icp
+    if isinstance(icp, dict) and not (evidence.get("audience_evidence") or "").strip():
+        icp["evidence_basis"] = "Working audience hypothesis based on the brand brief; validate with customer conversations and enquiries."
+        def mark_audience_hypotheses(value):
+            if isinstance(value, dict):
+                return {key: mark_audience_hypotheses(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [mark_audience_hypotheses(item) for item in value]
+            if isinstance(value, str):
+                return re.sub(r"\bverified\b", "hypothesized", value, flags=re.IGNORECASE)
+            return value
+        icp.update(mark_audience_hypotheses(icp))
+    if isinstance(icp, dict):
+        personas = icp.get("personas") or []
+        if isinstance(personas, list):
+            icp["personas"] = personas[:3]
+            safe_persona_fallbacks = [
+                ("Primary buyer", "The most likely buyer described in the brand brief"),
+                ("Careful evaluator", "A suitable customer comparing options and looking for proof"),
+                ("Ready-to-act prospect", "A suitable prospect who needs a clear route to enquire or buy"),
+            ]
+            while len(icp["personas"]) < 3:
+                name, description = safe_persona_fallbacks[len(icp["personas"])]
+                icp["personas"].append({
+                    "name": name,
+                    "evidence_status": "Hypothesis",
+                    "description": description,
+                    "goal": "Needs confirmation",
+                    "barrier": "Needs confirmation",
+                    "content_need": "Validate through customer questions and real enquiries",
+                })
+            for persona in icp["personas"]:
+                if not (evidence.get("audience_evidence") or "").strip():
+                    persona["evidence_status"] = "Hypothesis"
+
+    # Never manufacture a growth target when the owner supplied no baseline.
+    if not str(evidence.get("baseline") or "").strip():
+        for kpi in raw_data.get("kpis") or []:
+            target_text = str(kpi.get("monthly_targets") or "")
+            if re.search(r'\d|month[- ]over[- ]month|\bMoM\b', target_text, re.IGNORECASE):
+                kpi["monthly_targets"] = "Establish a 30-day baseline, then agree a realistic target from actual results."
+
+    # Make cadence deterministic: frequency is the total across all platforms, never per platform.
+    weekly_volume = max(1, int(requested_posts_per_week or 0)) if requested_posts_per_week else None
+    if weekly_volume:
+        requested = [p for p in (requested_platforms or []) if p]
+        playbook = raw_data.get("platform_playbook") or []
+        available = requested or [p.get("platform") for p in playbook if p.get("platform")]
+        if not requested:
+            available = available[:min(2, weekly_volume)]
+        available = available[:weekly_volume]
+        if available:
+            base, remainder = divmod(weekly_volume, len(available))
+            existing = {str(slot.get("platform")): slot for slot in (raw_data.get("posting_schedule") or [])}
+            schedule = []
+            for index, platform in enumerate(available):
+                count = base + (1 if index < remainder else 0)
+                slot = existing.get(str(platform), {})
+                slot.update({
+                    "platform": platform,
+                    "frequency": f"{count} {'post' if count == 1 else 'posts'} per week",
+                    "share_of_total": f"{count} of {weekly_volume} total weekly posts",
+                })
+                rationale = str(slot.get("rationale") or "Test this channel against qualified enquiries and useful audience response.")
+                if not (evidence.get("audit_notes") or "").strip():
+                    rationale = re.sub(r"^(Starting hypothesis:\s*)?", "Starting hypothesis: ", rationale)
+                slot["rationale"] = f"{rationale} This allocation is {count} of {weekly_volume} posts across all platforms."
+                schedule.append(slot)
+            raw_data["posting_schedule"] = schedule
+            raw_data["weekly_cadence_summary"] = f"Publish {weekly_volume} posts per week in total across all selected platforms."
 
     return raw_data
 
@@ -177,20 +267,24 @@ def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platform
 # the next one is used automatically.
 # Uses active Gemini 3.x generation models supported by Google's API.
 GEMINI_MODELS = [
-    "gemini-3.5-flash",         # Primary — verified active & fast
-    "gemini-3.5-flash-lite",    # High-throughput separate quota bucket
-    "gemini-3.8-flash",         # Next-gen flash fallback
-    "gemini-3-flash-preview",   # Preview tier fallback
-    "gemini-flash-latest",      # Alias fallback
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
 ]
 
 
 def get_gemini_client():
-    """Initializes and returns the Gemini client using the key from .env"""
+    """Return a bounded Gemini client suitable for serverless requests."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY is not set in your .env file.")
-    return genai.Client(api_key=api_key)
+        raise ValueError("GEMINI_API_KEY is not configured on the server.")
+    timeout_ms = int(os.getenv("AI_REQUEST_TIMEOUT_MS", "20000"))
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=timeout_ms,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
 
 
 def generate_with_fallback(prompt):
@@ -568,7 +662,9 @@ Build a customized, evidence-based, actionable social media strategy for this sp
 - Maximum Sustainable Posting Capacity: {max_weekly_posts} posts per week
  - Founder-provided strategy evidence: {json.dumps(strategy_inputs or {}, default=str)}
 
-Use the founder-provided evidence above when choosing platforms, pillars, KPIs, and tactics. Treat missing audit, competitor, audience, or keyword evidence as unknown. Never invent research or numerical targets. A zero budget means recommend free, founder-executable production methods.
+Use the founder-provided evidence above when choosing platforms, pillars, KPIs, and tactics. Treat missing audit, competitor, audience, or keyword evidence as unknown. Never invent research or numerical targets. The budget field is the monthly paid-social advertising budget, not a content-production budget. When it is zero, recommend an organic distribution plan and do not prescribe paid promotion.
+Build an evidence ledger before drafting: VERIFIED means explicitly present in the supplied brand profile or strategy evidence; INFERRED means a recommendation that must be labelled as a hypothesis; UNKNOWN must remain unknown. Never write an inferred or unknown detail as a fact about the company, its vehicles/products, pricing, financing, process, customers, results, location, or competitive position.
+If verified customer proof, operational processes, pricing policies, finance terms, inspection standards, or results were not supplied, do not invent examples of them. You may recommend collecting that evidence, but you may not create a fictional customer, transaction, testimonial, result, inspection checklist, or company policy.
 The competitor_notes field may contain only names, handles, or links. Treat these as accounts to review, not as completed competitor analysis. Do not claim to have inspected their posts, engagement, or positioning unless observations are explicitly supplied.
 If brand_stage is "new", state that there are no past posts to audit, build a first-month launch and measurement plan, and do not imply proven social performance. If posting history is unknown, mark it as unknown rather than assuming a launch or an active account.
 {guardrails_clause}{conversion_clause}{themes_clause}{values_clause}
@@ -595,7 +691,7 @@ CRITICAL STRATEGIC CONSTRAINTS & EVIDENCE DISCIPLINE:
    2) Entertainment, Memes & Relatable Humour: Relatable industry struggles, situational memes, ironic observations, inside jokes of the trade (e.g. Friday deployments, client review loops, payment edge cases).
    3) Community Engagement & Interactive Content: Provocative technical/industry polls, "spot the bug/flaw" quizzes, audience challenges, community spotlights, and UGC prompts.
    4) Product & Service Education: Workflow demonstrations, live UI screencasts, feature teardowns, problem-solution showcases.
-   5) Customer Stories & Social Proof: Merchant/client spotlights, transformation case studies, community wins, verified results.
+   5) Customer Stories & Social Proof: Use only when a real, permissioned story or verified result was supplied. Otherwise recommend an evidence-collection task instead of drafting the story.
    6) Brand Storytelling & Personality: Behind-the-scenes engineering culture, founder viewpoints, core company principles, team craft.
    7) Trends & Cultural Relevance: Timely commentary on industry shifts, regulatory news, cultural moments adapted intelligently to the niche.
 
@@ -627,39 +723,40 @@ CRITICAL STRATEGIC CONSTRAINTS & EVIDENCE DISCIPLINE:
 
 9. AUDIENCE SEGMENTATION & EVIDENCE BASIS:
    - Separate verified target market traits from strategic inferences.
-   - Segment the buyer universe across decision-maker tiers (Technical Decision-Makers vs Business & Operations Leaders).
-   - Connect pain points and buying objections to specific role responsibilities.
+   - Create exactly 3 useful audience personas for this specific business: the most likely primary buyer, an important secondary buyer or evaluator, and a ready-to-act prospect.
+   - Do not force enterprise job-title personas onto consumer or local businesses. Use relevant life stage, buying situation, location, budget context, need and decision role.
+   - Each persona must state whether it is Verified or a Hypothesis. Without customer evidence, every persona is a Hypothesis.
+   - Connect each persona's goal, barrier and content need to supplied evidence. Never invent demographics, income, location or behaviour.
 
 10. EMPIRICAL PLATFORM SCHEDULING (HYPOTHESIS-BASED):
     - Treat posting times as hypotheses for 30-day baseline testing, not infallible certainties.
     - Never exceed the owner-stated capacity of {max_weekly_posts} posts per week. Use repurposing to keep the plan sustainable.
+    - The posting capacity is the TOTAL across every platform, not a per-platform frequency. Allocate the total explicitly.
+    - For a local consumer business, do not recommend X by default. Include it only when the owner selected it or supplied evidence that its local buyers use it; otherwise prioritize stronger discovery and conversion channels and explain the trade-off.
 
 11. No Generic Buzzwords: Do not use clichés like "game-changer", "supercharge", "in today's fast-paced digital world", "unlock your potential". Be specific, culturally tuned, and grounded.
 11A. USER-FACING LANGUAGE: Write every summary, rationale, pillar, KPI, schedule note, and idea for a founder who may not have a social media manager. Use familiar marketing terms such as audience, content pillars, engagement, and KPIs where useful, but explain them in plain words. Avoid unexplained acronyms, technical implementation language, and agency jargon in descriptive text. Keep the required JSON keys and enum values unchanged. Give concrete examples tied to this brand.
 12. Conversion Discipline: Align CTAs with the conversion destination ({conversion_url or 'the brand website'}) and the primary commercial goal ({primary_goal}).
+12A. TARGET DISCIPLINE: Never invent weekly DM, lead, click, reach, engagement, test-drive, booking, or sales targets. A numerical target is permitted only when it appears in the founder evidence or is calculated from supplied baseline and conversion data. Otherwise say "Establish a 30-day baseline, then set the target."
 13. Hook Psychology: Anchor every idea's hook to one of the 8 Master Hook Archetypes (Contrarian Inversion, Asymmetric Result, High-Effort Extraction, Secret/Gatekeeping, Direct Pain Call-Out, Existential Threat, Relatable Observation, Step-by-Step System).
 
 Return a valid JSON object with this EXACT structure (no deviations):
 {{
-  "executive_summary": "2-3 crisp, confident sentences articulating the core commercial positioning thesis, portfolio balance, and distribution focus for client executive sign-off.",
+  "executive_summary": "2-3 concise client-ready sentences. Begin by introducing the brand using only confirmed business facts, then state the commercial goal, main opportunity, strategic direction, and any material point that still needs confirmation.",
   "strategic_assumptions": [
     "Identified assumption 1 (e.g. Assuming primary inbound acquisition prioritizes developer engineering teams over seed founders)",
     "Identified assumption 2 (e.g. Pillar weighting balances developer experience with merchant growth showcases)"
   ],
   "audience_icp_dossier": {{
     "evidence_basis": "Derived from brand profile and market positioning (assumptions to be calibrated with CRM data)",
-    "role_segments": [
+    "personas": [
       {{
-        "role_tier": "Technical Leadership (CTO, VP Eng, Lead Architect, Senior Developer)",
-        "core_priority": "System stability, architectural scalability, reducing technical debt",
-        "primary_friction": "Sprawling infrastructure, fragile pipelines, and endless context switching",
-        "buying_objections": ["Implementation risk", "Over-engineered solutions"]
-      }},
-      {{
-        "role_tier": "Executive / Business Leadership (Founder, CEO, COO, Commercial Director)",
-        "core_priority": "Predictable velocity, capital efficiency, revenue growth",
-        "primary_friction": "Failed payment rates, opaque engineering timelines, talent bottlenecks",
-        "buying_objections": ["Uncertain ROI", "Disruption to existing deliverables"]
+        "name": "Plain-language persona name",
+        "evidence_status": "Verified or Hypothesis",
+        "description": "Who they are in the buying situation, using only supplied facts",
+        "goal": "What outcome they need",
+        "barrier": "What may stop or delay them",
+        "content_need": "What content would help them decide"
       }}
     ],
     "category_enemy": "The outdated dogma, bad industry advice, or legacy habit that this brand challenges.",
@@ -749,12 +846,12 @@ Return a valid JSON object with this EXACT structure (no deviations):
   ]
 }}
 
-Generate exactly 30 content ideas in the content_ideas array.
+Generate exactly 12 high-quality content ideas in the content_ideas array. Quality, evidence safety, and executable detail matter more than volume.
 Ensure a rich distribution of creative angles across the 30 ideas:
 - Include relatable memes, situational humor, and cultural inside jokes.
 - Include interactive content with real stakes (polls with 4 options, scenario quizzes, community spotlights).
 - Include deep technical and product teardowns.
-- Include merchant/customer stories and social proof.
+- Include customer stories or social proof only when verified evidence was supplied; otherwise include an evidence-collection task marked evidence_required.
 Return ONLY the raw JSON object. Do not wrap in markdown quotes.
 """
 
@@ -764,7 +861,9 @@ Return ONLY the raw JSON object. Do not wrap in markdown quotes.
         raw_strategy,
         requested_hours=estimated_hours,
         requested_platforms=target_platforms,
-        requested_p_day=posts_per_day
+        requested_p_day=posts_per_day,
+        requested_posts_per_week=weekly_volume,
+        strategy_inputs=strategy_inputs,
     )
 
 

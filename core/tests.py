@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from .models import BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
 from .content_gap_service import research_content_gaps
+from .ai_service import clean_and_normalize_strategy
 from .strategy_service import generate_starter_strategy
 
 
@@ -31,6 +32,13 @@ class BrowserWorkflowTests(TestCase):
         self.assertContains(response, reverse("web:signup"))
         self.assertContains(response, "data-theme-toggle")
         self.assertContains(response, "core/theme.js")
+
+    def test_authenticated_layout_has_mobile_logout_control(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("web:dashboard"))
+        self.assertContains(response, 'class="mobile-logout-form"', html=False)
+        self.assertContains(response, 'aria-label="Log out"', html=False)
+        self.assertContains(response, reverse("web:logout"))
 
     def test_signed_in_home_redirects_to_dashboard(self):
         self.client.force_login(self.user)
@@ -228,14 +236,20 @@ class BrowserWorkflowTests(TestCase):
         self.assertIn("4 to 10", strategy.strategy_foundation["goal"])
         self.assertIn("setup time", strategy.content_ideas[0]["hook"])
         self.assertEqual(strategy.strategy_foundation["weekly_posts"], 3)
+        self.assertEqual(len(strategy.audience_icp_dossier["personas"]), 3)
         self.assertIn("new brand with no posts", strategy.strategy_foundation["audit"])
         self.assertIn("Accounts to review: @acme", strategy.strategy_foundation["competitors"])
         self.assertTrue(any("have not been analysed" in item for item in strategy.strategy_foundation["assumptions"]))
         detail = self.client.get(reverse("web:strategy_detail", args=[strategy.pk]))
-        self.assertContains(detail, "The numbers to check each month")
+        self.assertContains(detail, "The numbers that show progress")
         self.assertContains(detail, "EXECUTIVE SUMMARY")
-        self.assertContains(detail, "CTA AND CONVERSION PLAN")
-        self.assertContains(detail, "30-DAY ACTION PLAN")
+        self.assertContains(detail, "The brand and strategic direction")
+        self.assertContains(detail, "CONVERSION JOURNEY")
+        self.assertContains(detail, "30-DAY EXECUTION PLAN")
+        self.assertContains(detail, "APPENDIX A")
+        self.assertContains(detail, "APPENDIX B")
+        self.assertContains(detail, "III")
+        self.assertContains(detail, "Primary buyer")
         self.assertContains(detail, "Copy strategy")
         self.assertContains(detail, "Print / Save PDF")
 
@@ -244,6 +258,58 @@ class BrowserWorkflowTests(TestCase):
         plan = generate_starter_strategy(self.brand, requested_weekly_posts=5)
         self.assertEqual(plan["strategy_foundation"]["weekly_posts"], 3)
         self.assertIn("will not exceed that limit", plan["posting_schedule"][0]["rationale"])
+
+    def test_strategy_generation_defaults_to_ai_without_showing_a_mode_choice(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("web:brand_detail", args=[self.brand.pk]))
+        self.assertContains(response, 'name="mode"', html=False)
+        self.assertContains(response, 'value="ai"', html=False)
+        self.assertNotContains(response, "Free starter plan")
+        self.assertNotContains(response, "AI assisted plan")
+
+    def test_goal_sentence_is_not_duplicated_when_target_is_already_stated(self):
+        self.brand.strategy_inputs = {
+            "brand_stage": "new",
+            "goal_metric": "Sell at least 20 cars in the next 3 months",
+            "target": "20",
+            "deadline": "2027-03-03",
+        }
+        plan = generate_starter_strategy(self.brand)
+        goal = plan["strategy_foundation"]["goal"]
+        self.assertEqual(goal, "Sell at least 20 cars by 2027-03-03.")
+        self.assertNotIn("from to", goal)
+
+    def test_strategy_normalizer_blocks_unsupplied_customer_proof_and_targets(self):
+        raw = {
+            "content_ideas": [{
+                "hook": "How a local nurse found a reliable car",
+                "concept": "Show how our customer bought in under 1 hour.",
+                "claim_classification": "evidence_backed",
+            }],
+            "kpis": [
+                {"monthly_targets": "Target 15% MoM growth"},
+                {"monthly_targets": "Generate 5 high-intent DMs each week and 100 clicks"},
+            ],
+            "audience_icp_dossier": {},
+            "platform_playbook": [{"platform": "Instagram"}, {"platform": "TikTok"}, {"platform": "X"}],
+            "posting_schedule": [
+                {"platform": "Instagram", "frequency": "3 per week", "rationale": "Engagement is strongest mid-week."},
+                {"platform": "TikTok", "frequency": "3 per week"},
+            ],
+        }
+        result = clean_and_normalize_strategy(raw, requested_posts_per_week=3, strategy_inputs={})
+        idea = result["content_ideas"][0]
+        self.assertEqual(idea["claim_classification"], "evidence_required")
+        self.assertEqual(idea["publish_status"], "blocked_pending_evidence")
+        self.assertIn("Establish a 30-day baseline", result["kpis"][0]["monthly_targets"])
+        self.assertIn("Establish a 30-day baseline", result["kpis"][1]["monthly_targets"])
+        self.assertEqual(len(result["audience_icp_dossier"]["personas"]), 3)
+        self.assertEqual(len(result["posting_schedule"]), 2)
+        self.assertEqual(
+            sum(int(slot["frequency"].split()[0]) for slot in result["posting_schedule"]),
+            3,
+        )
+        self.assertTrue(all("total weekly posts" in slot["share_of_total"] for slot in result["posting_schedule"]))
 
     @patch("core.web_views.generate_content_strategy", return_value={"executive_summary": "Review before sharing."})
     def test_ai_strategy_receives_weekly_post_choice_and_stage(self, ai_generator):
@@ -315,7 +381,7 @@ class BrowserWorkflowTests(TestCase):
             "rewrite": "A sharper rewritten post.", "rewrite_notes": ["Made the CTA specific."],
         }
         self.client.force_login(self.user)
-        response = self.client.post(reverse("web:caption_analyzer", args=[self.brand.pk]), {
+        response = self.client.post(reverse("web:caption_analyzer"), {
             "platform": "linkedin",
             "caption": "Most teams do not have a content problem. They have a clarity problem.",
             "performance_context": "",
@@ -324,6 +390,75 @@ class BrowserWorkflowTests(TestCase):
         self.assertContains(response, "Potential effectiveness review")
         self.assertContains(response, "does not prove performance")
         analyzer.assert_called_once()
+        self.assertIsNone(analyzer.call_args.args[0])
+
+    @patch("core.web_views.optimize_profile")
+    def test_profile_optimizer_returns_copy_ready_profile(self, optimizer):
+        optimizer.return_value = {
+            "analysis_mode": "ai_optimizer", "summary": "The offer is clear but the next step is buried.",
+            "scorecard": {"clarity": 4, "discoverability": 3, "audience_fit": 4, "credibility": 3, "conversion": 2},
+            "what_works": ["Clear audience"], "gaps": ["No direct CTA"],
+            "keyword_opportunities": ["operations software"],
+            "optimized_profile": {"name_field": "Example Co | Operations Software", "bio": "Simplify daily operations.", "cta": "Book a demo"},
+            "alternatives": [{"angle": "Outcome-led", "bio": "Spend less time on manual operations."}],
+            "action_plan": ["Update the name field"],
+            "limitations": "No live analytics were inspected.",
+        }
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:profile_optimizer"), {
+            "platform": "linkedin", "business_name": "Example Co", "industry": "B2B SaaS",
+            "audience": "Operations leaders", "offer": "Operations software", "current_name": "Example Co",
+            "current_bio": "We make software for operations teams.",
+            "destination": "Book a demo", "profile_goal": "leads", "desired_cta": "Book a demo",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Example Co | Operations Software")
+        optimizer.assert_called_once()
+
+    @patch("core.web_views.optimize_profile")
+    def test_profile_optimizer_accepts_a_brand_without_a_current_bio(self, optimizer):
+        optimizer.return_value = {
+            "analysis_mode": "ai_optimizer", "starting_from_scratch": True,
+            "summary": "A first profile foundation was created.",
+            "scorecard": {"clarity": 3, "discoverability": 3, "audience_fit": 4, "credibility": 2, "conversion": 3},
+            "what_works": [], "gaps": ["Add a clear audience and next step"],
+            "keyword_opportunities": ["operations software"],
+            "optimized_profile": {"name_field": "Example Co", "bio": "Operations software for growing teams.", "cta": "Book a demo"},
+            "alternatives": [], "action_plan": ["Publish the first bio"],
+            "limitations": "No live analytics were inspected.",
+        }
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:profile_optimizer"), {
+            "platform": "instagram", "business_name": "Example Co", "industry": "B2B SaaS",
+            "audience": "Operations leaders", "current_name": "Example Co", "current_bio": "",
+            "destination": "Book a demo", "profile_goal": "leads",
+            "offer": "Operations software", "desired_cta": "Book a demo",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Operations software for growing teams")
+        optimizer.assert_called_once()
+
+    def test_owner_can_remove_a_brand_from_the_dashboard(self):
+        brand_pk = self.brand.pk
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:brand_delete", args=[brand_pk]))
+        self.assertRedirects(response, reverse("web:dashboard"))
+        self.assertFalse(BrandProfile.objects.filter(pk=brand_pk).exists())
+
+    def test_profile_optimizer_is_available_without_a_saved_brand(self):
+        standalone_user = User.objects.create_user(username="solo@example.com", password="safe-test-password")
+        self.client.force_login(standalone_user)
+        response = self.client.get(reverse("web:profile_optimizer"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No saved brand needed")
+
+    def test_profile_optimizer_offers_saved_brand_prefill(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("web:profile_optimizer"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Use a saved brand")
+        self.assertContains(response, self.brand.name)
+        self.assertContains(response, self.brand.target_audience)
 
     @patch("core.web_views.generate_repurpose_package")
     def test_repurpose_studio_saves_selected_platform_drafts(self, generator):

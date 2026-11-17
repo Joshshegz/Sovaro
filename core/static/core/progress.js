@@ -38,6 +38,10 @@
       title: "Reading the writing choices",
       description: "Sovaro is reviewing the hook, structure, credibility, platform fit, and next action.",
     },
+    profile: {
+      title: "Optimizing your profile",
+      description: "Sovaro is reviewing clarity, search language, credibility, audience fit, and the next action.",
+    },
   };
 
   function showTip(index) {

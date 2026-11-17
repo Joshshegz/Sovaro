@@ -245,9 +245,8 @@ class BrandProfileForm(forms.ModelForm):
 class StrategyOptionsForm(forms.Form):
     mode = forms.ChoiceField(
         choices=(("starter", "Free starter plan"), ("ai", "AI assisted plan")),
-        initial="starter",
-        label="How should Sovaro build your plan?",
-        help_text="The free plan needs no AI service. AI assistance uses Sovaro's configured service; you do not need your own key.",
+        initial="ai",
+        widget=forms.HiddenInput(),
     )
     platforms = forms.CharField(
         required=False,
@@ -266,6 +265,36 @@ class StrategyBriefForm(forms.Form):
         choices=(("unknown", "Not sure yet"), ("new", "New brand or starting from scratch"), ("active", "Already posting")),
         initial="unknown", label="Where is this brand starting?",
     )
+    service_area = forms.CharField(
+        required=False,
+        label="Where do you sell or serve customers?",
+        help_text="Add the city, country, delivery area, or say online worldwide.",
+        widget=forms.TextInput(attrs={"placeholder": "For example: Lagos and nearby areas"}),
+    )
+    offer_details = forms.CharField(
+        required=False,
+        label="What exactly are you trying to sell?",
+        help_text="Describe the main products, services, inventory, or package this strategy should support.",
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "For example: inspected used cars between ₦8m and ₦20m"}),
+    )
+    price_range = forms.CharField(
+        required=False,
+        label="Typical price range",
+        help_text="Optional. This helps Sovaro avoid targeting people who cannot realistically buy.",
+        widget=forms.TextInput(attrs={"placeholder": "For example: ₦8m–₦20m"}),
+    )
+    differentiators = forms.CharField(
+        required=False,
+        label="Why do customers choose you?",
+        help_text="Only include differences you can honestly prove.",
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "For example: same-day delivery, verified service history, specialist experience"}),
+    )
+    proof_available = forms.CharField(
+        required=False,
+        label="What proof can the content use?",
+        help_text="Add real reviews, results, records, demonstrations, credentials, or customer stories you have permission to share.",
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Leave blank if no proof is ready yet"}),
+    )
     goal_metric = forms.CharField(label="What result matters most?", help_text="Choose one number, such as website clicks, enquiries, sales, or engagement rate.")
     baseline = forms.DecimalField(required=False, min_value=0, label="Current result", help_text="Leave blank if you have not measured it yet.")
     target = forms.DecimalField(required=False, min_value=0, label="Target result")
@@ -279,7 +308,13 @@ class StrategyBriefForm(forms.Form):
         help_text="Optional. Paste up to five names, handles, or links. No analysis or long description needed.",
     )
     customer_keywords = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="What words do customers use?", help_text="Add a few phrases, separated by commas.")
-    budget = forms.DecimalField(required=False, min_value=0, initial=0, label="Monthly content budget", help_text="Enter 0 if you will create content yourself.")
+    budget = forms.DecimalField(
+        required=False,
+        min_value=0,
+        initial=0,
+        label="Monthly ads budget",
+        help_text="How much can you spend on paid social ads each month? Enter 0 if you plan to grow organically.",
+    )
 
     def clean(self):
         cleaned = super().clean()
@@ -363,3 +398,40 @@ class CaptionAnalyzerForm(forms.Form):
         if len(caption) > 12000:
             raise forms.ValidationError("Keep the pasted content below 12,000 characters.")
         return caption
+
+
+class ProfileOptimizerForm(forms.Form):
+    PLATFORM_CHOICES = (
+        ("instagram", "Instagram"), ("tiktok", "TikTok"),
+        ("linkedin", "LinkedIn"), ("x", "X"), ("youtube", "YouTube"),
+    )
+    GOAL_CHOICES = (
+        ("discovery", "Help the right people find the profile"),
+        ("leads", "Generate enquiries or bookings"),
+        ("sales", "Drive product or service sales"),
+        ("authority", "Build authority and trust"),
+        ("community", "Grow an engaged community"),
+    )
+    saved_brand = forms.ChoiceField(required=False, choices=(("", "Start from scratch"),), label="Use a saved brand")
+    platform = forms.ChoiceField(choices=PLATFORM_CHOICES, label="Platform")
+    business_name = forms.CharField(max_length=120, label="Business or creator name", widget=forms.TextInput(attrs={"placeholder": "For example: Dovee"}))
+    industry = forms.CharField(max_length=180, label="What industry or category are you in?", widget=forms.TextInput(attrs={"placeholder": "For example: creator marketplace or Lagos bakery"}))
+    audience = forms.CharField(max_length=300, label="Who do you want to attract?", widget=forms.TextInput(attrs={"placeholder": "Describe the customers, clients, followers or partners you want"}))
+    current_name = forms.CharField(required=False, max_length=120, label="Current profile name", widget=forms.TextInput(attrs={"placeholder": "Optional—leave blank if the profile is new"}))
+    current_bio = forms.CharField(required=False, label="Current bio or About text", widget=forms.Textarea(attrs={"rows": 6, "placeholder": "Paste the current bio—or leave this blank to create one from scratch."}), help_text="Optional. Leave blank if the profile is new or has no bio yet.")
+    destination = forms.CharField(required=False, max_length=300, label="Where should visitors go next?", widget=forms.TextInput(attrs={"placeholder": "Website, booking page, shop, newsletter or DMs"}))
+    profile_goal = forms.ChoiceField(choices=GOAL_CHOICES, label="What should this profile achieve?")
+    offer = forms.CharField(max_length=300, label="What do you offer?", widget=forms.TextInput(attrs={"placeholder": "The product, service or transformation people can get"}))
+    differentiator = forms.CharField(required=False, max_length=300, label="Why should someone choose this brand?", widget=forms.TextInput(attrs={"placeholder": "A specific approach, advantage or point of view"}))
+    service_area = forms.CharField(required=False, max_length=180, label="Where do you serve?", widget=forms.TextInput(attrs={"placeholder": "For example: Lagos, worldwide, or remote"}))
+    proof_points = forms.CharField(required=False, max_length=400, label="What can build trust?", widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Optional: verified experience, credentials, customer type or genuine proof"}))
+    desired_cta = forms.CharField(max_length=180, label="What should a visitor do next?", widget=forms.TextInput(attrs={"placeholder": "For example: book a consultation or shop the collection"}))
+
+    def __init__(self, *args, brands=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["saved_brand"].choices = [("", "Start from scratch")] + [
+            (str(brand.pk), brand.name) for brand in (brands or [])
+        ]
+
+    def clean_current_bio(self):
+        return self.cleaned_data["current_bio"].strip()

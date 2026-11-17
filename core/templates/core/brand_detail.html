@@ -1,12 +1,14 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="page-intro split brand-workspace-intro"><div class="brand-heading-row"><span class="brand-heading-image">{% if brand.brand_image %}<img src="{{ brand.brand_image.url }}" alt="{{ brand.name }} brand image">{% else %}{{ brand.name|first|upper }}{% endif %}</span><div><h1>{{ brand.name }}</h1><p>{{ brand.target_audience }}</p><div class="quick-links"><span class="pill">{{ brand.niche }}</span><span class="pill muted-pill">{{ brand.weekly_posts_capacity }} posts weekly</span></div></div></div><a class="button secondary" href="{% url 'web:brand_profile' brand.pk %}">Edit profile</a></section>
-<nav class="workspace-action-grid" aria-label="Brand actions">{% if strategy %}<a class="primary-action" href="{% url 'web:strategy_detail' strategy.id %}"><span>Strategy</span><strong>Review the current plan</strong></a>{% endif %}<a href="{% url 'web:repurpose_studio' brand.id %}"><span>Repurpose</span><strong>Turn one idea into many</strong></a><a href="{% url 'web:caption_analyzer' brand.id %}"><span>Caption coach</span><strong>Learn why a post may work</strong></a><a href="{% url 'web:ideas' brand.id %}"><span>Ideas</span><strong>Research content gaps</strong></a><a href="{% url 'web:reports' brand.id %}"><span>Reports</span><strong>Review monthly results</strong></a></nav>
+<nav class="workspace-action-grid" aria-label="Brand actions">{% if strategy %}<a class="primary-action" href="{% url 'web:strategy_detail' strategy.id %}"><span>Strategy</span><strong>Review the current plan</strong></a>{% endif %}<a href="{% url 'web:repurpose_studio' brand.id %}"><span>Repurpose</span><strong>Turn one idea into many</strong></a><a href="{% url 'web:ideas' brand.id %}"><span>Content research</span><strong>Find gaps worth creating for</strong></a><a href="{% url 'web:reports' brand.id %}"><span>Monthly results</span><strong>Review performance and next steps</strong></a></nav>
 <section class="form-card wide-form focused-form"><h2>{% if strategy %}Update the strategy brief{% else %}Create the first strategy{% endif %}</h2><p class="muted">Add what you know. Missing research can be completed later.</p>
   <form method="post" action="{% url 'web:strategy_generate' brand.id %}" class="stack" data-progress-mode="strategy">{% csrf_token %}
-    {{ brief_form.as_div }}
+    {% if brief_form.non_field_errors %}<div class="form-alert">{{ brief_form.non_field_errors }}</div>{% endif %}
+    <div class="strategy-brief-grid">{% for field in brief_form %}<div class="strategy-brief-field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}{% if field.errors %}<div class="field-error">{{ field.errors|striptags }}</div>{% endif %}</div>{% endfor %}</div>
     <div class="form-divider"><h3>Plan options</h3></div>
-    {{ form.as_div }}
+    {{ form.mode }}
+    <div class="strategy-options-grid">{% for field in form %}{% if field.name != 'mode' %}<div>{{ field.label_tag }}{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}{% if field.errors %}<div class="field-error">{{ field.errors|striptags }}</div>{% endif %}</div>{% endif %}{% endfor %}</div>
     <button>Save details and create plan</button>
   </form>
 </section>

@@ -1,6 +1,9 @@
 Django==6.1.2
 beautifulsoup4
+dj-database-url
 google-genai==2.29.0
+Pillow
+psycopg[binary]
 python-dotenv==1.2.4
 requests==2.34.2
 reportlab

@@ -13,7 +13,8 @@ from .ai_service import analyze_brand_from_url, generate_content_strategy
 from .audience_service import format_audience_suggestion, suggest_audience
 from .content_gap_service import research_content_gaps
 from .caption_analyzer_service import analyze_caption
-from .forms import AccountSettingsForm, BrandForm, BrandProfileForm, CaptionAnalyzerForm, EmailAuthenticationForm, RepurposeForm, SignUpForm, StrategyBriefForm, StrategyOptionsForm, ReportInputForm, ReportReviewForm, REPORT_METRICS
+from .profile_optimizer_service import optimize_profile
+from .forms import AccountSettingsForm, BrandForm, BrandProfileForm, CaptionAnalyzerForm, ProfileOptimizerForm, EmailAuthenticationForm, RepurposeForm, SignUpForm, StrategyBriefForm, StrategyOptionsForm, ReportInputForm, ReportReviewForm, REPORT_METRICS
 from .models import BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
 from .reporting_service import build_report_pdf
 from .report_workflow import prepare_report, build_guided_pdf
@@ -165,6 +166,16 @@ def brand_detail(request, pk):
 
 
 @login_required
+@require_http_methods(["POST"])
+def brand_delete(request, pk):
+    brand = get_object_or_404(owned_brands(request.user), pk=pk)
+    brand_name = brand.name
+    brand.delete()
+    messages.success(request, f"{brand_name} was removed from your workspace.")
+    return redirect("web:dashboard")
+
+
+@login_required
 def brand_profile(request, pk):
     brand = get_object_or_404(owned_brands(request.user), pk=pk)
     form = BrandProfileForm(request.POST or None, request.FILES or None, instance=brand)
@@ -235,7 +246,7 @@ def strategy_generate(request, brand_pk):
                 data["strategy_foundation"] = starter["strategy_foundation"]
             except Exception:
                 data = starter
-                messages.warning(request, "AI assistance was unavailable, so we created a free starter plan instead.")
+                messages.warning(request, "AI assistance is temporarily unavailable. We created a basic draft so your work is not lost; retry later for the fully tailored strategy.")
         else:
             data = starter
         strategy = ContentStrategy.objects.create(
@@ -346,15 +357,40 @@ def repurpose_detail(request, pk):
 
 
 @login_required
-def caption_analyzer(request, brand_pk):
-    brand = get_object_or_404(owned_brands(request.user), pk=brand_pk)
+def caption_analyzer(request):
     form = CaptionAnalyzerForm(request.POST or None)
     analysis = None
     if request.method == "POST" and form.is_valid():
-        analysis = analyze_caption(brand, form.cleaned_data)
+        analysis = analyze_caption(None, form.cleaned_data)
         if analysis.get("analysis_mode") == "rule_based":
             messages.warning(request, "The AI coach was unavailable, so Sovaro provided a basic structural review instead.")
-    return render(request, "core/caption_analyzer.html", {"brand": brand, "form": form, "analysis": analysis})
+    return render(request, "core/caption_analyzer.html", {"form": form, "analysis": analysis})
+
+
+@login_required
+def profile_optimizer(request):
+    brands = list(owned_brands(request.user))
+    form = ProfileOptimizerForm(request.POST or None, brands=brands)
+    result = None
+    if request.method == "POST" and form.is_valid():
+        result = optimize_profile(form.cleaned_data)
+        if result.get("analysis_mode") == "rule_based":
+            messages.warning(request, "The AI optimizer was unavailable, so Sovaro provided a basic profile review.")
+    brand_presets = {
+        str(brand.pk): {
+            "business_name": brand.name,
+            "industry": brand.niche,
+            "audience": brand.target_audience,
+            "current_name": brand.name,
+            "destination": brand.conversion_url or "",
+            "goal": brand.primary_goal,
+        }
+        for brand in brands
+    }
+    return render(request, "core/profile_optimizer.html", {
+        "form": form, "result": result, "brand_presets": brand_presets,
+        "has_saved_brands": bool(brands),
+    })
 
 
 @login_required

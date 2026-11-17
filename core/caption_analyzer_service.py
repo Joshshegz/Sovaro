@@ -38,13 +38,15 @@ def analyze_caption(brand, cleaned_data):
         if performance else
         "No metrics were supplied. Never say the caption worked, performed well, went viral, or caused an outcome. Discuss only why it may be effective."
     )
+    brand_context = (
+        f"Brand: {brand.name}\nMarket: {brand.niche}\nAudience: {brand.target_audience}\nBrand voice: {brand.tone_of_voice}"
+        if brand else
+        "Brand context: Not supplied. Judge only the pasted writing and do not invent a brand, audience, offer, or voice."
+    )
     prompt = f"""
 You are a senior social media copy coach. Teach the user how to recognise strong writing; do not merely grade it.
 
-Brand: {brand.name}
-Market: {brand.niche}
-Audience: {brand.target_audience}
-Brand voice: {brand.tone_of_voice}
+{brand_context}
 Platform: {platform}
 Performance context: {performance or 'None supplied'}
 

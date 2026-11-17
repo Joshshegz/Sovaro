@@ -1,5 +1,6 @@
 """A usable strategy baseline that does not require an external AI service."""
 
+import re
 from datetime import timedelta
 
 from django.utils import timezone
@@ -22,11 +23,20 @@ def build_foundation(brand, platforms):
     stage = inputs.get("brand_stage") or "unknown"
     audit_notes = (inputs.get("audit_notes") or "").strip()
     metric = inputs.get("goal_metric") or "the result that matters most to your business"
-    baseline = inputs.get("baseline")
-    target = inputs.get("target")
-    deadline = inputs.get("deadline")
-    if baseline is not None and target is not None and deadline:
+    baseline = str(inputs.get("baseline") or "").strip()
+    target = str(inputs.get("target") or "").strip()
+    deadline = str(inputs.get("deadline") or "").strip()
+    metric_text = str(metric).strip().rstrip(".")
+    metric_is_goal_sentence = len(metric_text.split()) >= 5 or any(
+        metric_text.lower().startswith(prefix) for prefix in ("sell ", "get ", "generate ", "increase ", "reach ")
+    )
+    if baseline and target and deadline:
         goal = f"Increase {metric} from {baseline} to {target} by {deadline}."
+    elif target and deadline and metric_is_goal_sentence:
+        metric_text = re.sub(r"\s+in (?:the )?next \d+ months?\b", "", metric_text, flags=re.IGNORECASE).strip()
+        goal = f"{metric_text[0].upper() + metric_text[1:]} by {deadline}."
+    elif target and deadline:
+        goal = f"Reach {target} {metric_text} by {deadline}."
     else:
         goal = f"Measure {metric} for 30 days, then set a realistic 90-day target."
     today = timezone.localdate()
@@ -59,6 +69,13 @@ def build_foundation(brand, platforms):
         "competitors": f"Accounts to review: {inputs['competitor_notes']}" if inputs.get("competitor_notes") else "No similar brands were added. Add a few names or links when available.",
         "keywords": [word.strip() for word in (inputs.get("customer_keywords") or "").split(",") if word.strip()],
         "budget": inputs.get("budget") or "0",
+        "verified_business_details": {
+            "service_area": inputs.get("service_area") or "Needs confirmation",
+            "offer_details": inputs.get("offer_details") or "Needs confirmation",
+            "price_range": inputs.get("price_range") or "Needs confirmation",
+            "differentiators": inputs.get("differentiators") or "Needs confirmation",
+            "proof_available": inputs.get("proof_available") or "No usable proof supplied yet",
+        },
         "platforms": platforms,
         "assumptions": assumptions,
     }
@@ -113,16 +130,24 @@ def generate_starter_strategy(brand, requested_platforms="", requested_weekly_po
     else:
         first_action = "Confirm whether the account has past posts. If it does, review them; if not, introduce the offer and publish a useful answer."
     tactics = [
-        {"week": 1, "action": first_action, "cost": "Use a simple text post or a phone photo."},
-        {"week": 2, "action": "Review three relevant brands. Answer another customer question and show one practical example.", "cost": "Reuse the same research for more than one post."},
-        {"week": 3, "action": "Show the real product or service and explain how someone can enquire or buy.", "cost": "Use existing photos or a phone recording."},
-        {"week": 4, "action": "Record reach, replies, clicks, and enquiries. Keep the topics that produced useful responses.", "cost": "Use the platform's free analytics."},
+        {"week": 1, "action": f"{first_action} Publish {weekly_posts} {post_word}: an introduction, one useful answer, and a clear offer post where capacity allows.", "cost": "Give every post one next step and record enquiries."},
+        {"week": 2, "action": f"Publish {weekly_posts} {post_word} using real customer questions and one verified product or service example.", "cost": "Reuse one source across formats without inventing proof."},
+        {"week": 3, "action": f"Publish {weekly_posts} {post_word} that explain the offer, address an objection, and invite a qualified enquiry.", "cost": "Use only confirmed prices, processes and results."},
+        {"week": 4, "action": f"Publish {weekly_posts} {post_word}, then compare topics, formats, clicks and qualified enquiries across the month.", "cost": "Keep the strongest topic and change one weak element next month."},
     ]
     foundation["tactics"] = tactics
     return {
         "strategy_foundation": foundation,
         "executive_summary": f"This strategy focuses on {primary} and a sustainable cadence of {weekly_posts} {post_word} per week. Customer questions and real brand examples will build trust, introduce the offer, and support {foundation['goal_metric']}. Results will be reviewed after 30 days and used to refine the next phase.",
-        "audience_icp_dossier": {"evidence_basis": foundation["audience_evidence"], "target_audience": brand.target_audience},
+        "audience_icp_dossier": {
+            "evidence_basis": foundation["audience_evidence"],
+            "target_audience": brand.target_audience,
+            "personas": [
+                {"name": "Primary buyer", "evidence_status": "Hypothesis", "description": brand.target_audience, "goal": "Solve the main problem described in the brand brief", "barrier": "Needs confirmation through customer conversations", "content_need": "Clear explanations, relevant examples and a direct next step"},
+                {"name": "Careful evaluator", "evidence_status": "Hypothesis", "description": "A potential customer comparing options before committing", "goal": "Reduce risk and make a confident choice", "barrier": "Unanswered questions, unclear proof or price uncertainty", "content_need": "Comparisons, process explanations and verified proof"},
+                {"name": "Ready-to-act prospect", "evidence_status": "Hypothesis", "description": "A suitable prospect who already understands the problem", "goal": "Confirm fit and take the next step", "barrier": "Friction in contacting, booking or buying", "content_need": "Offer details, availability and one clear call to action"},
+            ],
+        },
         "content_pillars": content_pillars,
         "platform_playbook": [{"platform": platform, "priority": "Primary" if index == 0 else "Secondary",
                                "rationale": "A starting choice for this kind of business. Check whether your customers use it and respond to your posts."}
