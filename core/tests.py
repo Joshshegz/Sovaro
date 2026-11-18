@@ -441,31 +441,19 @@ class BrowserWorkflowTests(TestCase):
         self.assertIn("no live web search", research["method"].lower())
 
     @patch("core.web_views.analyze_caption")
-    def test_caption_analyzer_teaches_without_claiming_unproven_performance(self, analyzer):
-        analyzer.return_value = {
-            "analysis_mode": "ai_coach", "verdict_label": "Potential effectiveness review",
-            "_ai_provider": "groq",
-            "summary": "The opening creates useful tension.", "purpose": "Teach a practical lesson.",
-            "hook": {"type": "Contrarian", "why_it_may_work": "It challenges an assumption.", "risk": "The body must prove it."},
-            "strengths": ["Specific opening"], "weaknesses": ["CTA is broad"],
-            "improvements": ["Ask one direct question"],
-            "scorecard": {"hook": 4, "clarity": 4, "relevance": 3, "credibility": 3, "cta": 2},
-            "platform_fit": "Appropriate for LinkedIn.",
-            "performance_interpretation": "No metrics were supplied, so this does not prove performance.",
-            "rewrite": "A sharper rewritten post.", "rewrite_notes": ["Made the CTA specific."],
-        }
+    def test_caption_coach_is_marked_coming_soon_without_running_ai(self, analyzer):
         self.client.force_login(self.user)
-        response = self.client.post(reverse("web:caption_analyzer"), {
+        response = self.client.get(reverse("web:caption_analyzer"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "CAPTION COACH")
+        self.assertContains(response, "COMING SOON")
+        self.assertContains(response, "Better feedback is being coached")
+        post_response = self.client.post(reverse("web:caption_analyzer"), {
             "platform": "linkedin",
             "caption": "Most teams do not have a content problem. They have a clarity problem.",
-            "performance_context": "",
         })
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Potential effectiveness review")
-        self.assertContains(response, "does not prove performance")
-        self.assertContains(response, "backup AI")
-        analyzer.assert_called_once()
-        self.assertIsNone(analyzer.call_args.args[0])
+        self.assertEqual(post_response.status_code, 200)
+        analyzer.assert_not_called()
 
     @patch("core.web_views.optimize_profile")
     def test_profile_optimizer_returns_copy_ready_profile(self, optimizer):

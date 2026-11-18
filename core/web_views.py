@@ -419,15 +419,7 @@ def repurpose_detail(request, pk):
 
 @login_required
 def caption_analyzer(request):
-    form = CaptionAnalyzerForm(request.POST or None)
-    analysis = None
-    if request.method == "POST" and form.is_valid():
-        analysis = analyze_caption(None, form.cleaned_data)
-        if analysis.get("analysis_mode") == "rule_based":
-            messages.warning(request, "The AI coach was unavailable, so Sovaro provided a basic structural review instead.")
-        else:
-            notify_ai_fallback(request, analysis)
-    return render(request, "core/caption_analyzer.html", {"form": form, "analysis": analysis})
+    return render(request, "core/caption_coming_soon.html")
 
 
 @login_required

@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Caption Coach · Coming soon{% endblock %}
+{% block content %}
+<section class="coming-soon-page">
+  <div class="coming-soon-mark" aria-hidden="true">Aa</div>
+  <p class="eyebrow">CAPTION COACH · COMING SOON</p>
+  <h1>Better feedback is being coached.</h1>
+  <p>We are refining Caption Coach so it can explain why writing may hold attention, separate evidence from assumptions, and suggest stronger edits without promising reach or virality.</p>
+  <div class="coming-soon-points"><span>Hook and clarity review</span><span>Platform-aware feedback</span><span>Evidence-safe rewrites</span></div>
+  <div class="actions"><a class="button" href="{% url 'web:dashboard' %}">Back to overview</a><a class="button secondary" href="{% url 'web:profile_optimizer' %}">Try Profile Optimizer</a></div>
+</section>
+{% endblock %}

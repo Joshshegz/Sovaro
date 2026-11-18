@@ -28,7 +28,7 @@
         <a href="{% url 'web:dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">▦</span> Overview</a>
         <a href="{% url 'web:brand_create' %}" {% if request.resolver_match.url_name == 'brand_create' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">＋</span> Add brand</a>
         <a href="{% url 'web:brand_scan' %}" {% if request.resolver_match.url_name == 'brand_scan' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⌕</span> Scan website</a>
-        <a href="{% url 'web:caption_analyzer' %}" {% if request.resolver_match.url_name == 'caption_analyzer' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◎</span> Caption coach</a>
+        <a href="{% url 'web:caption_analyzer' %}" {% if request.resolver_match.url_name == 'caption_analyzer' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◎</span> Caption coach <small class="nav-soon">Soon</small></a>
         <a href="{% url 'web:profile_optimizer' %}" {% if request.resolver_match.url_name == 'profile_optimizer' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◇</span> Profile optimizer</a>
         <a href="{% url 'web:account_settings' %}" {% if request.resolver_match.url_name == 'account_settings' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span> Settings</a>
       </nav>
