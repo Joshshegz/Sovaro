@@ -1,11 +1,18 @@
 from django.contrib import admin
-from .models import BrandProfile, Competitor, SocialPost, GeneratedIdea, MonthlyReport
+from .models import BrandMemory, BrandProfile, Competitor, SocialPost, GeneratedIdea, MonthlyReport
 
 
 @admin.register(BrandProfile)
 class BrandProfileAdmin(admin.ModelAdmin):
     list_display = ('name', 'niche', 'created_at')
     search_fields = ('name', 'niche')
+
+
+@admin.register(BrandMemory)
+class BrandMemoryAdmin(admin.ModelAdmin):
+    list_display = ('brand', 'category', 'status', 'updated_at')
+    list_filter = ('category', 'status', 'is_active')
+    search_fields = ('brand__name', 'statement', 'evidence')
 
 
 @admin.register(Competitor)

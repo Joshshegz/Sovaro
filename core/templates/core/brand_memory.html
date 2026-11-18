@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Brand memory · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-intro split"><div><p class="eyebrow">{{ brand.name|upper }} · INTELLIGENCE</p><h1>What Sovaro should remember</h1><p>Store verified facts, audience language, guardrails and performance lessons. Only confirmed memories influence AI-generated work.</p></div><span class="pill">{{ confirmed_count }} confirmed</span></section>
+
+<div class="memory-layout">
+  <section class="form-card memory-form-card">
+    <p class="eyebrow">{% if editing_memory %}EDIT MEMORY{% else %}ADD KNOWLEDGE{% endif %}</p>
+    <h2>{% if editing_memory %}Update this memory{% else %}Teach Sovaro something useful{% endif %}</h2>
+    <form method="post" class="stack">{% csrf_token %}
+      {% if editing_memory %}<input type="hidden" name="memory_id" value="{{ editing_memory.pk }}">{% endif %}
+      {% for field in form %}<div>{{ field.label_tag }}{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}{{ field.errors }}</div>{% endfor %}
+      <div class="actions"><button type="submit">{% if editing_memory %}Save changes{% else %}Save to brand memory{% endif %}</button>{% if editing_memory %}<a class="button secondary" href="{% url 'web:brand_memory' brand.pk %}">Cancel</a>{% endif %}</div>
+    </form>
+  </section>
+
+  <section class="memory-library">
+    <div class="memory-explainer"><strong>Confirmed means usable.</strong><p>Working hypotheses and items needing confirmation stay visible, but Sovaro will not present them as brand facts.</p></div>
+    {% if memories %}<div class="memory-list">{% for memory in memories %}
+      <article class="memory-card">
+        <div class="memory-card-head"><span>{{ memory.get_category_display }}</span><span class="memory-status {{ memory.status }}">{{ memory.get_status_display }}</span></div>
+        <h3>{{ memory.statement }}</h3>
+        {% if memory.evidence %}<p><strong>Evidence:</strong> {{ memory.evidence }}</p>{% endif %}
+        <footer><a href="?edit={{ memory.pk }}">Edit</a><div class="memory-actions">{% if memory.status != 'confirmed' %}<form method="post" action="{% url 'web:brand_memory_status' brand.pk memory.pk %}">{% csrf_token %}<input type="hidden" name="status" value="confirmed"><button class="button secondary" type="submit">Confirm</button></form>{% endif %}<form method="post" action="{% url 'web:brand_memory_delete' brand.pk memory.pk %}" onsubmit="return confirm('Remove this memory?')">{% csrf_token %}<button class="text-danger" type="submit">Remove</button></form></div></footer>
+      </article>
+    {% endfor %}</div>{% else %}<div class="empty"><h2>No memories yet</h2><p>Add one confirmed fact or lesson the next strategy should know.</p></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

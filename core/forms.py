@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
 
-from .models import BrandProfile, MonthlyReport
+from .models import BrandMemory, BrandProfile, MonthlyReport
 
 
 REPORT_METRICS = (
@@ -240,6 +240,33 @@ class BrandProfileForm(forms.ModelForm):
         if image and image.size > 3 * 1024 * 1024:
             raise forms.ValidationError("Choose an image smaller than 3 MB.")
         return image
+
+
+class BrandMemoryForm(forms.ModelForm):
+    class Meta:
+        model = BrandMemory
+        fields = ("category", "statement", "evidence", "status")
+        labels = {
+            "category": "What kind of knowledge is this?",
+            "statement": "What should Sovaro remember?",
+            "evidence": "What supports this?",
+            "status": "How certain is this?",
+        }
+        help_texts = {
+            "statement": "Write one clear fact, insight, lesson or restriction.",
+            "evidence": "Optional: customer quote, report result, owner confirmation or source note.",
+            "status": "Only confirmed memories are used as facts in AI outputs.",
+        }
+        widgets = {
+            "statement": forms.Textarea(attrs={"rows": 3, "placeholder": "For example: Customers usually ask about delivery time before price."}),
+            "evidence": forms.Textarea(attrs={"rows": 2, "placeholder": "For example: Repeated in five customer enquiries this month."}),
+        }
+
+    def clean_statement(self):
+        statement = self.cleaned_data["statement"].strip()
+        if len(statement) < 10:
+            raise forms.ValidationError("Add enough detail for this memory to be useful.")
+        return statement
 
 
 class StrategyOptionsForm(forms.Form):

@@ -9,7 +9,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from unittest.mock import Mock, patch
 
-from .models import BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
+from .models import BrandMemory, BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
+from .brand_memory import approved_brand_memory
 from .content_gap_service import research_content_gaps
 from .ai_service import clean_and_normalize_strategy, generate_with_fallback
 from .strategy_service import generate_starter_strategy
@@ -187,6 +188,35 @@ class BrowserWorkflowTests(TestCase):
         response = self.client.get(reverse("web:brand_detail", args=[self.brand.pk]))
         self.assertEqual(response.status_code, 404)
 
+    def test_brand_memory_is_owned_reviewable_and_prompt_ready(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:brand_memory", args=[self.brand.pk]), {
+            "category": "customer_language",
+            "statement": "Customers usually describe the problem as setup taking too long.",
+            "evidence": "Repeated in five customer enquiries.",
+            "status": "needs_confirmation",
+        })
+        self.assertRedirects(response, reverse("web:brand_memory", args=[self.brand.pk]))
+        memory = BrandMemory.objects.get(brand=self.brand)
+        self.assertNotIn("setup taking too long", approved_brand_memory(self.brand))
+
+        self.client.post(reverse("web:brand_memory_status", args=[self.brand.pk, memory.pk]), {
+            "status": "confirmed",
+        })
+        memory.refresh_from_db()
+        self.assertEqual(memory.status, "confirmed")
+        self.assertIn("setup taking too long", approved_brand_memory(self.brand))
+        page = self.client.get(reverse("web:brand_memory", args=[self.brand.pk]))
+        self.assertContains(page, "Only confirmed memories influence AI-generated work")
+
+        other = User.objects.create_user(username="memory-other@example.com", password="safe-test-password")
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(reverse("web:brand_memory", args=[self.brand.pk])).status_code, 404)
+        self.assertEqual(
+            self.client.post(reverse("web:brand_memory_delete", args=[self.brand.pk, memory.pk])).status_code,
+            404,
+        )
+
     def test_first_month_report_can_be_reviewed_and_exported(self):
         self.client.force_login(self.user)
         response = self.client.post(reverse("web:report_create", args=[self.brand.pk]), {
@@ -348,6 +378,12 @@ class BrowserWorkflowTests(TestCase):
 
     @patch("core.web_views.generate_content_strategy", return_value={"executive_summary": "Review before sharing."})
     def test_ai_strategy_receives_weekly_post_choice_and_stage(self, ai_generator):
+        BrandMemory.objects.create(
+            brand=self.brand,
+            category="guardrail",
+            statement="Never claim guaranteed implementation times.",
+            status="confirmed",
+        )
         self.client.force_login(self.user)
         response = self.client.post(reverse("web:strategy_generate", args=[self.brand.pk]), {
             "mode": "ai", "brand_stage": "new", "goal_metric": "enquiries",
@@ -357,6 +393,7 @@ class BrowserWorkflowTests(TestCase):
         self.assertEqual(ai_generator.call_args.kwargs["posts_per_week"], 4)
         self.assertEqual(ai_generator.call_args.kwargs["weekly_posts_capacity"], 3)
         self.assertEqual(ai_generator.call_args.kwargs["strategy_inputs"]["brand_stage"], "new")
+        self.assertIn("guaranteed implementation times", ai_generator.call_args.kwargs["brand_memory"])
 
     @patch("core.web_views.research_content_gaps")
     def test_grounded_gap_research_replaces_ideas_and_keeps_evidence(self, researcher):

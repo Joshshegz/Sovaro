@@ -14,8 +14,9 @@ from .audience_service import format_audience_suggestion, suggest_audience
 from .content_gap_service import research_content_gaps
 from .caption_analyzer_service import analyze_caption
 from .profile_optimizer_service import optimize_profile
-from .forms import AccountSettingsForm, BrandForm, BrandProfileForm, CaptionAnalyzerForm, ProfileOptimizerForm, EmailAuthenticationForm, RepurposeForm, SignUpForm, StrategyBriefForm, StrategyOptionsForm, ReportInputForm, ReportReviewForm, REPORT_METRICS
-from .models import BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
+from .forms import AccountSettingsForm, BrandForm, BrandMemoryForm, BrandProfileForm, CaptionAnalyzerForm, ProfileOptimizerForm, EmailAuthenticationForm, RepurposeForm, SignUpForm, StrategyBriefForm, StrategyOptionsForm, ReportInputForm, ReportReviewForm, REPORT_METRICS
+from .models import BrandMemory, BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
+from .brand_memory import approved_brand_memory
 from .reporting_service import build_report_pdf
 from .report_workflow import prepare_report, build_guided_pdf
 from .repurpose_service import generate_repurpose_package
@@ -187,6 +188,55 @@ def brand_profile(request, pk):
 
 
 @login_required
+def brand_memory(request, brand_pk):
+    brand = get_object_or_404(owned_brands(request.user), pk=brand_pk)
+    memory = None
+    memory_id = request.POST.get("memory_id") if request.method == "POST" else request.GET.get("edit")
+    if memory_id:
+        memory = get_object_or_404(BrandMemory, pk=memory_id, brand=brand)
+    form = BrandMemoryForm(request.POST or None, instance=memory)
+    if request.method == "POST" and form.is_valid():
+        saved = form.save(commit=False)
+        saved.brand = brand
+        saved.source = "user"
+        saved.is_active = True
+        saved.save()
+        messages.success(request, "Brand memory updated." if memory else "Brand memory saved.")
+        return redirect("web:brand_memory", brand_pk=brand.pk)
+    return render(request, "core/brand_memory.html", {
+        "brand": brand,
+        "form": form,
+        "editing_memory": memory,
+        "memories": brand.memories.filter(is_active=True),
+        "confirmed_count": brand.memories.filter(is_active=True, status="confirmed").count(),
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def brand_memory_status(request, brand_pk, memory_pk):
+    brand = get_object_or_404(owned_brands(request.user), pk=brand_pk)
+    memory = get_object_or_404(BrandMemory, pk=memory_pk, brand=brand)
+    status = request.POST.get("status")
+    allowed = {value for value, _ in BrandMemory.STATUS_CHOICES}
+    if status in allowed:
+        memory.status = status
+        memory.save(update_fields=["status", "updated_at"])
+        messages.success(request, f"Memory marked as {memory.get_status_display().lower()}.")
+    return redirect("web:brand_memory", brand_pk=brand.pk)
+
+
+@login_required
+@require_http_methods(["POST"])
+def brand_memory_delete(request, brand_pk, memory_pk):
+    brand = get_object_or_404(owned_brands(request.user), pk=brand_pk)
+    memory = get_object_or_404(BrandMemory, pk=memory_pk, brand=brand)
+    memory.delete()
+    messages.success(request, "Brand memory removed.")
+    return redirect("web:brand_memory", brand_pk=brand.pk)
+
+
+@login_required
 @require_http_methods(["POST"])
 def strategy_brief_save(request, brand_pk):
     brand = get_object_or_404(owned_brands(request.user), pk=brand_pk)
@@ -242,6 +292,7 @@ def strategy_generate(request, brand_pk):
                     posts_per_week=form.cleaned_data["posts_per_week"],
                     content_formats=brand.content_formats,
                     strategy_inputs=brand.strategy_inputs,
+                    brand_memory=approved_brand_memory(brand),
                 )
                 data["strategy_foundation"] = starter["strategy_foundation"]
             except Exception:

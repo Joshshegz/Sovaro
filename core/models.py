@@ -86,6 +86,38 @@ class BrandProfile(models.Model):
         return self.name
 
 
+class BrandMemory(models.Model):
+    CATEGORY_CHOICES = (
+        ("brand_fact", "Brand fact"),
+        ("offer", "Offer or product"),
+        ("audience_insight", "Audience insight"),
+        ("customer_language", "Customer language"),
+        ("performance_lesson", "Performance lesson"),
+        ("guardrail", "Claim or topic to avoid"),
+    )
+    STATUS_CHOICES = (
+        ("confirmed", "Confirmed"),
+        ("hypothesis", "Working hypothesis"),
+        ("needs_confirmation", "Needs confirmation"),
+    )
+
+    brand = models.ForeignKey(BrandProfile, on_delete=models.CASCADE, related_name="memories")
+    category = models.CharField(max_length=40, choices=CATEGORY_CHOICES)
+    statement = models.TextField()
+    evidence = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="needs_confirmation")
+    source = models.CharField(max_length=30, default="user", blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category", "-updated_at"]
+
+    def __str__(self):
+        return f"{self.brand.name}: {self.statement[:60]}"
+
+
 class Competitor(models.Model):
     """Competitors or inspiration accounts monitored by a brand across socials."""
     brand = models.ForeignKey(BrandProfile, on_delete=models.CASCADE, related_name='competitors')
