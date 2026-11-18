@@ -51,6 +51,14 @@ def extract_json_from_llm(text):
     raise ValueError(f"Could not parse valid JSON from AI response: {text[:200]}...")
 
 
+def tag_ai_provider(data, response):
+    """Attach safe provider metadata to structured output for user-facing notices."""
+    if isinstance(data, dict):
+        data["_ai_provider"] = getattr(response, "provider", "gemini")
+        data["_ai_model"] = getattr(response, "model", "")
+    return data
+
+
 def clean_and_normalize_strategy(raw_data, requested_hours=4, requested_platforms=None, requested_p_day=None, requested_posts_per_week=None, strategy_inputs=None):
     """
     POST-GENERATION VALIDATION & NORMALIZATION PIPELINE:
@@ -317,7 +325,11 @@ def _generate_with_groq(prompt):
     content = (((payload.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
     if not content:
         raise ValueError("Groq returned an empty response.")
-    return SimpleNamespace(text=content, provider="groq")
+    return SimpleNamespace(
+        text=content,
+        provider="groq",
+        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+    )
 
 
 def generate_with_fallback(prompt):
@@ -334,7 +346,8 @@ def generate_with_fallback(prompt):
             client = get_gemini_client()
             for model in GEMINI_MODELS:
                 try:
-                    return client.models.generate_content(model=model, contents=prompt)
+                    response = client.models.generate_content(model=model, contents=prompt)
+                    return SimpleNamespace(text=response.text, provider="gemini", model=model)
                 except Exception as exc:
                     errors.append((f"gemini:{model}", exc))
                     logger.warning("AI provider failed: gemini model=%s error=%s", model, type(exc).__name__)
@@ -893,6 +906,7 @@ Return ONLY the raw JSON object. Do not wrap in markdown quotes.
 
     response = generate_with_fallback(prompt)
     raw_strategy = extract_json_from_llm(response.text)
+    tag_ai_provider(raw_strategy, response)
     return clean_and_normalize_strategy(
         raw_strategy,
         requested_hours=estimated_hours,

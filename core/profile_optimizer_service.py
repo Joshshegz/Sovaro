@@ -1,6 +1,6 @@
 import re
 
-from .ai_service import extract_json_from_llm, generate_with_fallback
+from .ai_service import extract_json_from_llm, generate_with_fallback, tag_ai_provider
 
 
 PLATFORM_LIMITS = {
@@ -105,6 +105,7 @@ Create exactly two meaningfully different alternatives.
     try:
         response = generate_with_fallback(prompt)
         result = extract_json_from_llm(response.text)
+        tag_ai_provider(result, response)
         result["analysis_mode"] = "ai_optimizer"
         result["starting_from_scratch"] = starting_fresh
         for key in ("clarity", "discoverability", "audience_fit", "credibility", "conversion"):

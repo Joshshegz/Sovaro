@@ -55,7 +55,12 @@ Return only JSON with this exact shape:
         barriers = [str(item).strip() for item in data.get("barriers", []) if str(item).strip()][:3]
         if not audience or not needs or not barriers:
             raise ValueError("Incomplete audience suggestion")
-        return {"audience": audience, "needs": needs, "barriers": barriers, "source": "ai"}
+        return {
+            "audience": audience,
+            "needs": needs,
+            "barriers": barriers,
+            "source": getattr(response, "provider", "gemini"),
+        }
     except Exception:
         return {**fallback, "source": "starter"}
 

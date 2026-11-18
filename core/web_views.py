@@ -27,6 +27,14 @@ def owned_brands(user):
     return BrandProfile.objects.filter(user=user).order_by("name")
 
 
+def notify_ai_fallback(request, payload):
+    if isinstance(payload, dict) and payload.get("_ai_provider") == "groq":
+        messages.info(
+            request,
+            "Gemini was unavailable, so Sovaro completed this with its backup AI. Review the result as usual.",
+        )
+
+
 def home(request):
     if request.user.is_authenticated:
         return redirect("web:dashboard")
@@ -295,6 +303,7 @@ def strategy_generate(request, brand_pk):
                     brand_memory=approved_brand_memory(brand),
                 )
                 data["strategy_foundation"] = starter["strategy_foundation"]
+                notify_ai_fallback(request, data)
             except Exception:
                 data = starter
                 messages.warning(request, "AI assistance is temporarily unavailable. We created a basic draft so your work is not lost; retry later for the fully tailored strategy.")
@@ -377,6 +386,7 @@ def repurpose_studio(request, brand_pk):
     if request.method == "POST" and form.is_valid():
         try:
             package = generate_repurpose_package(brand, form.cleaned_data)
+            notify_ai_fallback(request, package)
             project = RepurposeProject.objects.create(
                 brand=brand,
                 mode=form.cleaned_data["mode"],
@@ -415,6 +425,8 @@ def caption_analyzer(request):
         analysis = analyze_caption(None, form.cleaned_data)
         if analysis.get("analysis_mode") == "rule_based":
             messages.warning(request, "The AI coach was unavailable, so Sovaro provided a basic structural review instead.")
+        else:
+            notify_ai_fallback(request, analysis)
     return render(request, "core/caption_analyzer.html", {"form": form, "analysis": analysis})
 
 
@@ -427,6 +439,8 @@ def profile_optimizer(request):
         result = optimize_profile(form.cleaned_data)
         if result.get("analysis_mode") == "rule_based":
             messages.warning(request, "The AI optimizer was unavailable, so Sovaro provided a basic profile review.")
+        else:
+            notify_ai_fallback(request, result)
     brand_presets = {
         str(brand.pk): {
             "business_name": brand.name,

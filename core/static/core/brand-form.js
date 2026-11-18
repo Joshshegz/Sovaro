@@ -83,9 +83,11 @@
         if (!response.ok) throw new Error(data.error || 'We could not build a suggestion right now.');
         audienceField.value = data.suggestion;
         audienceField.dispatchEvent(new Event('input', { bubbles: true }));
-        suggestionStatus.textContent = data.source === 'ai'
-          ? 'AI draft added. Edit it with what you know about real customers.'
-          : 'Starter draft added. AI was unavailable, so review and personalise it.';
+        suggestionStatus.textContent = data.source === 'starter'
+          ? 'Starter draft added. AI was unavailable, so review and personalise it.'
+          : data.source === 'groq'
+            ? 'Backup AI completed this draft because Gemini was unavailable. Review and personalise it.'
+            : 'AI draft added. Edit it with what you know about real customers.';
         suggestionStatus.className = 'audience-suggestion-status is-success';
         suggestButton.innerHTML = '<span aria-hidden="true">↻</span> Regenerate suggestion';
       } catch (error) {

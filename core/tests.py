@@ -45,7 +45,8 @@ class AIProviderFallbackTests(TestCase):
 
         response = generate_with_fallback("Return JSON.")
 
-        self.assertIs(response, generated)
+        self.assertEqual(response.text, generated.text)
+        self.assertEqual(response.provider, "gemini")
         post.assert_not_called()
 
 
@@ -443,6 +444,7 @@ class BrowserWorkflowTests(TestCase):
     def test_caption_analyzer_teaches_without_claiming_unproven_performance(self, analyzer):
         analyzer.return_value = {
             "analysis_mode": "ai_coach", "verdict_label": "Potential effectiveness review",
+            "_ai_provider": "groq",
             "summary": "The opening creates useful tension.", "purpose": "Teach a practical lesson.",
             "hook": {"type": "Contrarian", "why_it_may_work": "It challenges an assumption.", "risk": "The body must prove it."},
             "strengths": ["Specific opening"], "weaknesses": ["CTA is broad"],
@@ -461,6 +463,7 @@ class BrowserWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Potential effectiveness review")
         self.assertContains(response, "does not prove performance")
+        self.assertContains(response, "backup AI")
         analyzer.assert_called_once()
         self.assertIsNone(analyzer.call_args.args[0])
 

@@ -1,6 +1,6 @@
 import re
 
-from .ai_service import extract_json_from_llm, generate_with_fallback
+from .ai_service import extract_json_from_llm, generate_with_fallback, tag_ai_provider
 
 
 def _fallback_analysis(caption, platform, has_metrics):
@@ -83,6 +83,7 @@ Score every scorecard item from 1 to 5.
     try:
         response = generate_with_fallback(prompt)
         data = extract_json_from_llm(response.text)
+        tag_ai_provider(data, response)
         data["analysis_mode"] = "ai_coach"
         for key in ("hook", "clarity", "relevance", "credibility", "cta"):
             value = int((data.get("scorecard") or {}).get(key, 1))

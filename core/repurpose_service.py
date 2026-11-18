@@ -1,6 +1,6 @@
 import re
 
-from .ai_service import extract_json_from_llm, generate_with_fallback
+from .ai_service import extract_json_from_llm, generate_with_fallback, tag_ai_provider
 from .brand_memory import approved_brand_memory
 
 
@@ -124,6 +124,7 @@ Score each hook dimension from 1 to 5 and set total to the sum out of 30.
 """
     response = generate_with_fallback(prompt)
     data = extract_json_from_llm(response.text)
+    tag_ai_provider(data, response)
     outputs = data.get("outputs") or []
     selected = set(platforms)
     aliases = {"twitter": "x", "x (twitter)": "x"}
