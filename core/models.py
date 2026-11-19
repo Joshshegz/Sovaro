@@ -299,6 +299,16 @@ class ContentStrategy(models.Model):
         help_text="Grounded competitor coverage, whitespace findings, sources and research queries",
     )
     content_gap_researched_at = models.DateTimeField(null=True, blank=True)
+    weekly_plan = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Executable first-week posts with platform, format, hook, CTA, owner and status",
+    )
+    validation_report = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Deterministic quality-gate results recorded when the strategy was created",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -308,6 +318,42 @@ class ContentStrategy(models.Model):
 
     def __str__(self):
         return f"Strategy for {self.brand.name} ({self.created_at.strftime('%b %Y')})"
+
+
+class PostResult(models.Model):
+    ACTION_CHOICES = (
+        ("repeat", "Repeat"),
+        ("change", "Change"),
+        ("stop", "Stop"),
+        ("test", "Test next"),
+        ("insufficient", "Not enough evidence"),
+    )
+
+    brand = models.ForeignKey(BrandProfile, on_delete=models.CASCADE, related_name="post_results")
+    strategy = models.ForeignKey(ContentStrategy, on_delete=models.SET_NULL, null=True, blank=True, related_name="post_results")
+    plan_key = models.CharField(max_length=80, blank=True, default="")
+    title = models.CharField(max_length=255)
+    platform = models.CharField(max_length=40, blank=True, default="")
+    published_on = models.DateField(null=True, blank=True)
+    reach = models.PositiveIntegerField(default=0)
+    views = models.PositiveIntegerField(default=0)
+    saves = models.PositiveIntegerField(default=0)
+    shares = models.PositiveIntegerField(default=0)
+    comments = models.PositiveIntegerField(default=0)
+    link_clicks = models.PositiveIntegerField(default=0)
+    enquiries = models.PositiveIntegerField(default=0)
+    sales = models.PositiveIntegerField(default=0)
+    observation = models.TextField(blank=True, default="")
+    lesson = models.TextField(blank=True, default="")
+    next_action = models.CharField(max_length=20, choices=ACTION_CHOICES, default="insufficient")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-published_on", "-created_at"]
+
+    def __str__(self):
+        return f"{self.brand.name}: {self.title}"
 
 
 class RepurposeProject(models.Model):

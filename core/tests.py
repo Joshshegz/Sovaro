@@ -9,14 +9,139 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from unittest.mock import Mock, patch
 
-from .models import BrandMemory, BrandProfile, ContentStrategy, MonthlyReport, RepurposeProject
+from .models import BrandMemory, BrandProfile, ContentStrategy, MonthlyReport, PostResult, RepurposeProject
 from .brand_memory import approved_brand_memory
 from .content_gap_service import research_content_gaps
-from .ai_service import clean_and_normalize_strategy, generate_with_fallback
+from .ai_service import clean_and_normalize_strategy, generate_content_strategy, generate_with_fallback, normalize_industry_label, normalize_target_audience, repair_strategy_sections
+from .ai_service import WebsiteFetchError
 from .strategy_service import generate_starter_strategy
+from .profile_optimizer_service import suggest_profile_cta
+from .strategy_quality import build_first_week_plan, validate_strategy
+from .two_week_strategy import build_two_week_plan
+
+
+class StrategyQualityGateTests(TestCase):
+    def setUp(self):
+        user = User.objects.create_user(username="quality@example.com", password="test-password")
+        self.brand = BrandProfile.objects.create(
+            user=user, name="Face Facts", niche="Skincare", target_audience="Adults with oily skin",
+            primary_goal="Generate 30 qualified enquiries in 90 days", weekly_posts_capacity=3,
+        )
+
+    def test_week_one_respects_platform_allocation(self):
+        data = generate_starter_strategy(self.brand, "Instagram,TikTok", 3)
+        data["posting_schedule"] = [
+            {"platform": "Instagram", "frequency": "2 posts per week"},
+            {"platform": "TikTok", "frequency": "1 post per week"},
+        ]
+        data["weekly_plan"] = build_first_week_plan(self.brand, data)
+        self.assertEqual([post["platform"] for post in data["weekly_plan"]], ["Instagram", "Instagram", "TikTok"])
+        self.assertNotIn("Week-one posts do not match", " ".join(validate_strategy(self.brand, data)["errors"]))
+
+    def test_empty_kpis_and_unconfirmed_price_block_sharing(self):
+        data = generate_starter_strategy(self.brand, "Instagram", 3)
+        data["weekly_plan"] = build_first_week_plan(self.brand, data)
+        data["kpis"] = []
+        data["content_ideas"][0]["concept"] = "Buy our £15 treatment today."
+        report = validate_strategy(self.brand, data)
+        self.assertEqual(report["status"], "blocked")
+        self.assertTrue(any("primary measure" in error for error in report["errors"]))
+        self.assertTrue(any("price" in error for error in report["errors"]))
+
+    def test_two_week_plan_keeps_capacity_and_labels_public_evidence(self):
+        data = generate_starter_strategy(self.brand, "Instagram,TikTok", 3)
+        data["posting_schedule"] = [
+            {"platform": "Instagram", "frequency": "2 posts per week"},
+            {"platform": "TikTok", "frequency": "1 post per week"},
+        ]
+        research = {"source_status": "grounded", "ideas": [{
+            "platform": "Instagram", "hook": "A sourced customer question", "concept": "Answer the question",
+            "source_url": "https://www.instagram.com/p/example/", "format": "Carousel",
+        }]}
+        plan = build_two_week_plan(self.brand, data, research)
+        self.assertEqual(len(plan), 6)
+        self.assertEqual([post["platform"] for post in plan[:3]], ["Instagram", "Instagram", "TikTok"])
+        self.assertEqual(plan[0]["source_url"], "https://www.instagram.com/p/example/")
+        self.assertEqual(plan[0]["evidence_status"], "Public source linked; performance unverified")
+
+    def test_four_brand_types_keep_their_goal_and_platforms(self):
+        cases = [
+            ("Luma Skin", "Skincare", "Generate 30 enquiries", "enquiries", "Instagram,TikTok"),
+            ("Joshua Motors", "Car dealership", "Sell 20 cars", "sales", "Instagram,Facebook"),
+            ("Joy Cakes", "Bakery", "Get 12 cake bookings", "bookings", "Instagram"),
+            ("Automaark", "Business software", "Generate 10 qualified leads", "leads", "LinkedIn"),
+        ]
+        for name, niche, goal, metric, platforms in cases:
+            with self.subTest(name=name):
+                self.brand.name, self.brand.niche, self.brand.primary_goal = name, niche, goal
+                self.brand.strategy_inputs = {"goal_metric": metric, "brand_stage": "new"}
+                data = generate_starter_strategy(self.brand, platforms, 3)
+                data["executive_summary"] = f"{name} will test a practical publishing plan to support {goal.lower()} through customer questions and clear next steps."
+                data["weekly_plan"] = build_first_week_plan(self.brand, data)
+                report = validate_strategy(self.brand, data)
+                self.assertEqual(data["strategy_foundation"]["owner_stated_goal"], goal)
+                self.assertFalse(any("unselected platform" in error or "primary KPI" in error for error in report["errors"]))
+
+    def test_unselected_platform_and_unproved_result_are_blocked(self):
+        self.brand.strategy_inputs = {"goal_metric": "enquiries"}
+        data = generate_starter_strategy(self.brand, "Instagram", 3)
+        data["executive_summary"] = "Face Facts will answer customer questions to support the owner's enquiry goal while testing its first month."
+        data["platform_playbook"].append({"platform": "LinkedIn"})
+        data["content_ideas"][0]["claim_classification"] = "evidence_backed"
+        data["weekly_plan"] = build_first_week_plan(self.brand, data)
+        report = validate_strategy(self.brand, data)
+        self.assertTrue(any("unselected platform" in error for error in report["errors"]))
+        self.assertTrue(any("no brand proof" in error for error in report["errors"]))
+
+    def test_changed_owner_target_is_blocked(self):
+        self.brand.primary_goal = "Generate 30 qualified enquiries in 90 days"
+        data = generate_starter_strategy(self.brand, "Instagram", 3)
+        data["strategy_foundation"]["goal"] = "Generate 20 qualified enquiries in 90 days"
+        data["executive_summary"] = "Face Facts will answer customer questions to support qualified enquiries while testing its first month."
+        data["weekly_plan"] = build_first_week_plan(self.brand, data)
+        report = validate_strategy(self.brand, data)
+        self.assertTrue(any("numerical target" in error for error in report["errors"]))
+
+    def test_owner_supplied_target_survives_normalization_without_baseline(self):
+        raw = {"kpis": [{"primary_kpi": "Qualified enquiries", "monthly_targets": "30 qualified enquiries in 90 days"}]}
+        result = clean_and_normalize_strategy(raw, strategy_inputs={"owner_goal": "Generate 30 qualified enquiries in 90 days"})
+        self.assertEqual(result["kpis"][0]["monthly_targets"], "30 qualified enquiries in 90 days")
+
+    @patch("core.ai_service.generate_with_fallback")
+    def test_prompt_has_one_idea_count_and_no_brand_specific_template(self, generator):
+        generator.return_value = SimpleNamespace(text='{"content_ideas": []}', provider="gemini", model="test")
+        generate_content_strategy("Joy Cakes", "Bakery", "Lagos families", "Warm", primary_goal="Get cake bookings")
+        prompt = generator.call_args.args[0]
+        self.assertIn("exactly 12 high-quality content ideas", prompt)
+        self.assertNotIn("30 ideas", prompt)
+        self.assertNotIn("Paystack", prompt)
+        self.assertIn("EVIDENCE RULE OVERRIDES", prompt)
+
+    @patch("core.ai_service.generate_with_fallback")
+    def test_repair_requests_only_failing_sections(self, generator):
+        generator.return_value = SimpleNamespace(text='{"kpis": [{"primary_kpi": "Qualified enquiries", "monthly_targets": "30 in 90 days"}]}', provider="gemini", model="test")
+        self.brand.strategy_inputs = {"goal_metric": "enquiries"}
+        data = generate_starter_strategy(self.brand, "Instagram", 3)
+        data["kpis"] = []
+        repaired = repair_strategy_sections(self.brand, data, ["Add a primary measure and a target or baseline plan before sharing."])
+        self.assertEqual(repaired["kpis"][0]["primary_kpi"], "Qualified enquiries")
+        self.assertIn("exactly these keys: kpis", generator.call_args.args[0])
 
 
 class AIProviderFallbackTests(TestCase):
+    def test_long_positioning_is_reduced_to_short_industry_category(self):
+        self.assertEqual(
+            normalize_industry_label("AI-Powered Innovation and Intellectual Property Monetization Platform"),
+            "Technology",
+        )
+        self.assertEqual(normalize_industry_label("Project Management Software"), "Project Management")
+        self.assertEqual(
+            normalize_target_audience(
+                "Creators, innovators, investors, entrepreneurs, and forward-thinking organizations looking to conceptualize and monetize ideas"
+            ),
+            "Creators, innovators, investors, entrepreneurs, and forward-thinking organizations",
+        )
+
     @patch.dict(os.environ, {"GEMINI_API_KEY": "gemini-test", "GROQ_API_KEY": "groq-test"}, clear=False)
     @patch("core.ai_service.requests.post")
     @patch("core.ai_service.get_gemini_client", side_effect=RuntimeError("Gemini quota exhausted"))
@@ -144,6 +269,8 @@ class BrowserWorkflowTests(TestCase):
         self.assertContains(response, "Suggest with AI")
         self.assertContains(response, "Warm &amp; approachable")
         self.assertContains(response, "Other / create a custom tone")
+        self.assertContains(response, "Find active competitors")
+        self.assertContains(response, "data-competitor-suggest")
 
     def test_custom_brand_tone_is_saved(self):
         self.client.force_login(self.user)
@@ -165,6 +292,30 @@ class BrowserWorkflowTests(TestCase):
             "Candid, sharp and encouraging",
         )
 
+    def test_new_brand_requires_owner_confirmation_without_duplicate_memory(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:brand_create"), {
+            "name": "Luma Skin", "niche": "Lagos skincare",
+            "business_model": "d2c_ecommerce",
+            "primary_goal": "Generate 30 qualified WhatsApp enquiries in 90 days",
+            "weekly_posts_capacity": 3, "conversion_url": "https://example.com/whatsapp",
+            "target_audience": "Women aged 20 to 35 in Lagos with oily skin",
+            "tone_of_voice": "Calm and reassuring", "custom_tone": "",
+            "negative_guardrails": "Do not claim to cure acne.",
+            "competitor_notes": "Active Rival | Instagram + TikTok | https://instagram.com/active | https://tiktok.com/@active",
+        })
+        brand = BrandProfile.objects.get(name="Luma Skin")
+        self.assertRedirects(response, reverse("web:brand_confirm", args=[brand.pk]))
+        blocked = self.client.post(reverse("web:strategy_generate", args=[brand.pk]), {})
+        self.assertRedirects(blocked, reverse("web:brand_confirm", args=[brand.pk]))
+        confirmed = self.client.post(reverse("web:brand_confirm", args=[brand.pk]))
+        self.assertRedirects(confirmed, reverse("web:brand_detail", args=[brand.pk]))
+        brand.refresh_from_db()
+        self.assertEqual(brand.strategy_inputs["onboarding_status"], "confirmed")
+        self.assertIn("Active Rival", brand.strategy_inputs["competitor_notes"])
+        self.assertFalse(brand.memories.filter(source="onboarding").exists())
+        self.assertEqual(approved_brand_memory(brand), "No additional confirmed brand memory has been saved.")
+
     @patch("core.audience_service.generate_with_fallback", side_effect=RuntimeError("AI unavailable"))
     def test_audience_suggestion_has_starter_fallback(self, _generator):
         self.client.force_login(self.user)
@@ -182,6 +333,59 @@ class BrowserWorkflowTests(TestCase):
         self.assertIn("Likely audience:", payload["suggestion"])
         self.assertIn("What they likely need:", payload["suggestion"])
         self.assertIn("What may get in the way:", payload["suggestion"])
+
+    @patch("core.web_views.analyze_brand_from_url")
+    def test_website_scan_accepts_bare_domain_and_normalizes_https(self, analyzer):
+        analyzer.return_value = {
+            "brand_name": "Luma Skin", "niche": "Skincare",
+            "business_model": "d2c_ecommerce", "target_audience": "Women in Lagos",
+            "tone_of_voice": "Calm and reassuring",
+        }
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:brand_scan"), {"url": "www.lumaskin.com"})
+        brand = BrandProfile.objects.get(name="Luma Skin")
+        analyzer.assert_called_once_with("https://www.lumaskin.com")
+        self.assertEqual(brand.conversion_url, "https://www.lumaskin.com")
+        self.assertEqual(brand.strategy_inputs["onboarding_status"], "pending")
+        self.assertRedirects(response, reverse("web:brand_confirm", args=[brand.pk]))
+
+    def test_website_scan_field_does_not_block_bare_domains_in_browser(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("web:brand_scan"))
+        self.assertContains(response, 'type="text"', html=False)
+        self.assertContains(response, "Sovaro will add https://")
+
+    @patch("core.web_views.analyze_brand_from_url", side_effect=WebsiteFetchError("Website returned HTTP 403.", status_code=403))
+    def test_blocked_website_explains_no_ai_model_ran(self, analyzer):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:brand_scan"), {"url": "dove.com"})
+        self.assertContains(response, "No AI model ran")
+        self.assertContains(response, "add the brand manually")
+        analyzer.assert_called_once_with("https://dove.com")
+
+    @patch("core.web_views.discover_active_competitors")
+    def test_competitor_search_returns_only_service_verified_candidates(self, discover):
+        discover.return_value = {
+            "source_status": "grounded", "limitations": [],
+            "competitors": [{
+                "name": "Active Rival", "relationship": "direct competitor",
+                "why_relevant": "Serves the same market.",
+                "verification_status": "Recent activity found on at least two social platforms",
+                "platforms": [
+                    {"platform": "Instagram", "url": "https://instagram.com/active", "recent_posts_found": 3, "recent_activity_evidence": "Recent posts found"},
+                    {"platform": "LinkedIn", "url": "https://linkedin.com/company/active", "recent_posts_found": 2, "recent_activity_evidence": "Recent posts found"},
+                ],
+            }],
+        }
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("web:competitor_suggestion"),
+            data=json.dumps({"brand_name": "Example", "industry": "Technology", "audience": "Founders"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["competitors"][0]["name"], "Active Rival")
+        discover.assert_called_once_with("Example", "Technology", "Founders", "")
 
     def test_other_user_cannot_view_brand_workspace(self):
         other = User.objects.create_user(username="other@example.com", password="safe-test-password")
@@ -208,7 +412,7 @@ class BrowserWorkflowTests(TestCase):
         self.assertEqual(memory.status, "confirmed")
         self.assertIn("setup taking too long", approved_brand_memory(self.brand))
         page = self.client.get(reverse("web:brand_memory", args=[self.brand.pk]))
-        self.assertContains(page, "Only confirmed memories influence AI-generated work")
+        self.assertContains(page, "Approved for use, not independently verified.")
 
         other = User.objects.create_user(username="memory-other@example.com", password="safe-test-password")
         self.client.force_login(other)
@@ -303,6 +507,8 @@ class BrowserWorkflowTests(TestCase):
         self.assertIn("setup time", strategy.content_ideas[0]["hook"])
         self.assertEqual(strategy.strategy_foundation["weekly_posts"], 3)
         self.assertEqual(len(strategy.audience_icp_dossier["personas"]), 3)
+        self.assertEqual(len(strategy.weekly_plan), 3)
+        self.assertEqual(strategy.validation_report["status"], "blocked")
         self.assertIn("new brand with no posts", strategy.strategy_foundation["audit"])
         self.assertIn("Accounts to review: @acme", strategy.strategy_foundation["competitors"])
         self.assertTrue(any("have not been analysed" in item for item in strategy.strategy_foundation["assumptions"]))
@@ -318,6 +524,47 @@ class BrowserWorkflowTests(TestCase):
         self.assertContains(detail, "Primary buyer")
         self.assertContains(detail, "Copy strategy")
         self.assertContains(detail, "Print / Save PDF")
+        self.assertContains(detail, "EXECUTABLE WEEK ONE")
+        self.assertContains(detail, "Record result")
+
+    @patch("core.web_views.research_content_gaps")
+    def test_two_week_button_builds_six_post_trial(self, research):
+        research.return_value = {"source_status": "research_unavailable", "ideas": [], "content_gaps": []}
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:strategy_generate", args=[self.brand.pk]), {
+            "mode": "starter", "plan_horizon": "14", "platforms": "Instagram,TikTok",
+            "brand_stage": "new", "goal_metric": "website enquiries", "baseline": "4",
+            "target": "10", "deadline": "2027-02-01",
+        })
+        self.assertEqual(response.status_code, 302)
+        strategy = ContentStrategy.objects.get(brand=self.brand)
+        self.assertEqual(strategy.strategy_foundation["plan_horizon_days"], 14)
+        self.assertEqual(len(strategy.strategy_foundation["two_week_plan"]), 6)
+        detail = self.client.get(reverse("web:strategy_detail", args=[strategy.pk]))
+        self.assertContains(detail, "TWO-WEEK STARTER STRATEGY")
+        self.assertContains(detail, "Live competitor research was unavailable")
+
+    def test_post_result_creates_confirmed_learning_memory(self):
+        strategy = ContentStrategy.objects.create(
+            brand=self.brand, executive_summary="Starting plan", strategy_foundation={"weekly_posts": 1},
+            content_pillars=[], platform_playbook=[], content_mix={}, posting_schedule=[],
+            content_ideas=[], kpis=[], cta_strategy=[],
+            weekly_plan=[{"key": "week-1-1", "hook": "Answer the setup question", "platform": "LinkedIn"}],
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:strategy_results", args=[strategy.pk]), {
+            "plan_key": "week-1-1", "title": "Answer the setup question", "platform": "LinkedIn",
+            "published_on": "2026-11-18", "reach": 500, "views": 0, "saves": 12,
+            "shares": 4, "comments": 3, "link_clicks": 8, "enquiries": 2, "sales": 0,
+            "observation": "This post earned more saves than our other posts.",
+            "lesson": "Repeat practical setup answers with one direct enquiry CTA.",
+            "next_action": "repeat",
+        })
+        self.assertRedirects(response, reverse("web:strategy_results", args=[strategy.pk]))
+        self.assertTrue(PostResult.objects.filter(strategy=strategy, plan_key="week-1-1").exists())
+        memory = BrandMemory.objects.get(brand=self.brand, source="post_result")
+        self.assertEqual(memory.status, "confirmed")
+        self.assertIn("Repeat practical setup answers", approved_brand_memory(self.brand))
 
     def test_requested_cadence_never_exceeds_owner_capacity(self):
         self.brand.strategy_inputs = {"brand_stage": "new", "goal_metric": "enquiries"}
@@ -396,6 +643,27 @@ class BrowserWorkflowTests(TestCase):
         self.assertEqual(ai_generator.call_args.kwargs["strategy_inputs"]["brand_stage"], "new")
         self.assertIn("guaranteed implementation times", ai_generator.call_args.kwargs["brand_memory"])
 
+    @patch("core.web_views.repair_strategy_sections")
+    @patch("core.web_views.generate_content_strategy")
+    def test_failed_ai_draft_gets_one_repair_attempt(self, generator, repair):
+        draft = generate_starter_strategy(self.brand, "LinkedIn", 3)
+        draft["_ai_provider"] = "gemini"
+        draft["kpis"] = []
+        generator.return_value = draft
+        fixed = generate_starter_strategy(self.brand, "LinkedIn", 3)
+        fixed["_ai_provider"] = "gemini"
+        fixed["executive_summary"] = f"{self.brand.name} will answer buyer questions and test LinkedIn content to support its stated goal."
+        repair.return_value = fixed
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("web:strategy_generate", args=[self.brand.pk]), {
+            "mode": "ai", "platforms": "LinkedIn", "brand_stage": "new", "goal_metric": "enquiries",
+        })
+        self.assertEqual(response.status_code, 302)
+        repair.assert_called_once()
+        strategy = ContentStrategy.objects.get(brand=self.brand)
+        self.assertTrue(strategy.validation_report["repair_attempted"])
+        self.assertTrue(strategy.kpis)
+
     @patch("core.web_views.research_content_gaps")
     def test_grounded_gap_research_replaces_ideas_and_keeps_evidence(self, researcher):
         strategy = ContentStrategy.objects.create(
@@ -431,14 +699,33 @@ class BrowserWorkflowTests(TestCase):
         self.assertIsNotNone(strategy.content_gap_researched_at)
 
     @patch("core.content_gap_service.get_gemini_client", side_effect=ValueError("missing key"))
-    def test_content_gap_research_falls_back_without_claiming_live_sources(self, _client):
+    def test_content_gap_research_stops_without_inventing_gaps_or_ideas(self, _client):
         research = research_content_gaps(self.brand)
 
-        self.assertEqual(research["source_status"], "starter_fallback")
-        self.assertEqual(len(research["ideas"]), 12)
+        self.assertEqual(research["source_status"], "research_unavailable")
+        self.assertEqual(research["ideas"], [])
+        self.assertEqual(research["content_gaps"], [])
         self.assertEqual(research["grounding_sources"], [])
-        self.assertTrue(all(gap["confidence"] == "low" for gap in research["content_gaps"]))
-        self.assertIn("no live web search", research["method"].lower())
+        self.assertIn("competitor post", " ".join(research["required_inputs"]).lower())
+
+    @patch("core.web_views.research_content_gaps")
+    def test_failed_research_removes_retired_generic_fallback_ideas(self, researcher):
+        strategy = ContentStrategy.objects.create(
+            brand=self.brand, executive_summary="Starting plan",
+            content_pillars=[], platform_playbook=[], content_mix={}, posting_schedule=[],
+            content_ideas=[{"hook": "Before you choose, ask these questions"}],
+            content_gap_research={"source_status": "starter_fallback"},
+            kpis=[], cta_strategy=[],
+        )
+        researcher.return_value = {
+            "source_status": "research_unavailable", "content_gaps": [], "ideas": [],
+            "research_summary": "No research completed.", "required_inputs": [],
+            "limitations": ["No sources inspected."], "queries": [], "grounding_sources": [],
+        }
+        self.client.force_login(self.user)
+        self.client.post(reverse("web:research_content_gaps", args=[self.brand.pk]))
+        strategy.refresh_from_db()
+        self.assertEqual(strategy.content_ideas, [])
 
     @patch("core.web_views.analyze_caption")
     def test_caption_coach_is_marked_coming_soon_without_running_ai(self, analyzer):
@@ -516,12 +803,36 @@ class BrowserWorkflowTests(TestCase):
         self.assertContains(response, "No saved brand needed")
 
     def test_profile_optimizer_offers_saved_brand_prefill(self):
+        self.brand.strategy_inputs = {
+            "offer_details": "Operations software for small teams",
+            "differentiators": "Simple setup",
+            "service_area": "United Kingdom",
+            "proof_available": "Owner says the product is already used by two teams",
+        }
+        self.brand.tone_of_voice = "Clear and practical"
+        self.brand.primary_goal = "Generate 10 qualified enquiries"
+        self.brand.negative_guardrails = "Do not promise guaranteed savings"
+        self.brand.social_profiles = {"linkedin": "https://www.linkedin.com/company/example-co/"}
+        self.brand.save()
         self.client.force_login(self.user)
-        response = self.client.get(reverse("web:profile_optimizer"))
+        response = self.client.get(reverse("web:profile_optimizer") + f"?brand={self.brand.pk}")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Use a saved brand")
         self.assertContains(response, self.brand.name)
         self.assertContains(response, self.brand.target_audience)
+        self.assertEqual(response.context["form"]["saved_brand"].value(), str(self.brand.pk))
+        self.assertEqual(response.context["form"]["offer"].value(), "Operations software for small teams")
+        self.assertEqual(response.context["form"]["brand_voice"].value(), "Clear and practical")
+        self.assertEqual(response.context["form"]["claims_to_avoid"].value(), "Do not promise guaranteed savings")
+        self.assertEqual(response.context["form"]["platform"].value(), "linkedin")
+        self.assertEqual(response.context["form"]["profile_reference"].value(), "https://www.linkedin.com/company/example-co/")
+        self.assertFalse(response.context["form"]["current_bio"].value())
+        self.assertEqual(response.context["form"]["desired_cta"].value(), "Send an enquiry")
+
+    def test_profile_cta_follows_goal_and_known_destination(self):
+        self.assertEqual(suggest_profile_cta("leads", "Get 20 enquiries", "https://wa.me/234123"), "Message us on WhatsApp to enquire")
+        self.assertEqual(suggest_profile_cta("leads", "Get 10 bookings"), "Ask about booking an appointment")
+        self.assertEqual(suggest_profile_cta("sales", "Sell more products"), "Explore the offer")
 
     @patch("core.web_views.generate_repurpose_package")
     def test_repurpose_studio_saves_selected_platform_drafts(self, generator):

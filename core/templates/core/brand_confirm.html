@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Confirm {{ brand.name }} · Sovaro{% endblock %}
+{% block content %}
+<section class="page-intro split"><div><p class="eyebrow">BRAND CONFIRMATION</p><h1>Is this what you meant?</h1><p>Review these details before Sovaro uses them as owner-supplied information in strategies and content.</p></div><a class="button secondary" href="{% url 'web:brand_profile' brand.pk %}#brand-details">Edit details</a></section>
+
+<section class="confirmation-layout">
+  <div class="form-card confirmation-card">
+    <div class="confirmation-status"><span aria-hidden="true">✓</span><div><strong>Owner review required</strong><p>Check each detail. Approval means you want Sovaro to use it; it does not independently verify it.</p></div></div>
+    <dl class="confirmation-list">
+      <div><dt>Brand</dt><dd>{{ brand.name }}</dd></div>
+      <div><dt>Industry</dt><dd>{% if website_scan %}Review below{% else %}{{ brand.niche }}{% endif %}</dd></div>
+      {% if not website_scan %}<div><dt>Owner-stated goal</dt><dd>{{ brand.primary_goal }}</dd></div>{% endif %}
+      <div><dt>Audience</dt><dd>{{ brand.target_audience }}</dd></div>
+      {% if brand.strategy_inputs.audience_needs %}<div><dt>What they need</dt><dd>{{ brand.strategy_inputs.audience_needs }}</dd></div>{% endif %}
+      {% if brand.strategy_inputs.audience_barriers %}<div><dt>What gets in the way</dt><dd>{{ brand.strategy_inputs.audience_barriers }}</dd></div>{% endif %}
+      <div><dt>Brand voice</dt><dd>{{ brand.tone_of_voice }}</dd></div>
+      <div><dt>Publishing capacity</dt><dd>{{ brand.weekly_posts_capacity }} post{{ brand.weekly_posts_capacity|pluralize }} per week in total</dd></div>
+      <div><dt>Conversion destination</dt><dd>{{ brand.conversion_url|default:"Not added yet" }}</dd></div>
+      <div><dt>Claims or topics to avoid</dt><dd>{{ brand.negative_guardrails|default:"None added yet" }}</dd></div>
+    </dl>
+    <form method="post">{% csrf_token %}{% if website_scan %}<div class="confirmation-goal"><label for="id_industry">Correct industry</label><input id="id_industry" name="industry" type="text" maxlength="180" value="{{ brand.niche }}" required><span>Website wording can be misleading. Correct this before approval.</span></div><div class="confirmation-goal"><label for="id_primary_goal">Your business goal</label><input id="id_primary_goal" name="primary_goal" type="text" maxlength="255" required placeholder="For example: 30 qualified enquiries in 90 days"><span>State the result and timeframe you want. Sovaro cannot infer this from a website.</span></div>{% endif %}<div class="brand-form-actions"><div><strong>These details are accurate</strong><span>Sovaro will use this brand profile in future plans. You can edit it later.</span></div><button type="submit">Confirm and continue →</button></div></form>
+  </div>
+  <aside class="brand-form-guide"><p class="eyebrow">WHY THIS STEP EXISTS</p><h2>Better facts, safer output</h2><p>Sovaro separates approved information from hypotheses. This prevents the AI from quietly changing your goal or inventing information about the business.</p><div class="guide-note"><span>i</span><p>You can update these facts later from Brand profile or Brand memory.</p></div></aside>
+</section>
+{% endblock %}

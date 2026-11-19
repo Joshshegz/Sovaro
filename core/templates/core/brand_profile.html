@@ -6,8 +6,9 @@
   <section class="form-card profile-upload-card">
     <div class="profile-image-preview">{% if brand.brand_image %}<img src="{{ brand.brand_image.url }}" alt="{{ brand.name }} brand image">{% else %}<span aria-hidden="true">{{ brand.name|first|upper }}</span>{% endif %}</div>
     <div><p class="eyebrow">BRAND IMAGE</p><h2>{% if brand.brand_image %}Replace the current image{% else %}Add a logo or profile image{% endif %}</h2><p class="muted">A square image works best. It will appear throughout this brand’s workspace and client documents.</p>
-    <form method="post" enctype="multipart/form-data" class="stack brand-image-form">{% csrf_token %}{{ form.as_div }}<button type="submit">Save brand image</button></form></div>
+    <form method="post" enctype="multipart/form-data" class="stack brand-image-form">{% csrf_token %}<input type="hidden" name="form_type" value="image">{{ form.as_div }}<button type="submit">Save brand image</button></form></div>
   </section>
   <aside class="profile-summary-card"><p class="eyebrow">IDENTITY SNAPSHOT</p><h2>{{ brand.name }}</h2><dl><div><dt>Industry</dt><dd>{{ brand.niche }}</dd></div><div><dt>Business goal</dt><dd>{{ brand.primary_goal }}</dd></div><div><dt>Brand voice</dt><dd>{{ brand.tone_of_voice }}</dd></div><div><dt>Publishing capacity</dt><dd>{{ brand.weekly_posts_capacity }} posts per week</dd></div></dl><a href="{% url 'web:brand_detail' brand.pk %}">Review strategy details →</a></aside>
 </div>
+<section class="form-card wide-form" id="brand-details"><h2>Edit brand details</h2><p class="muted">Correct the facts Sovaro uses in your plans. Your business goal should come from you.</p><form method="post" class="strategy-brief-grid">{% csrf_token %}<input type="hidden" name="form_type" value="details">{% for field in details_form %}<div class="strategy-brief-field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}<div><button type="submit">Save details</button></div></form></section>
 {% endblock %}

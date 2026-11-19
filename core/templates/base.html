@@ -5,9 +5,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#f6f8fc">
+  <link rel="icon" type="image/svg+xml" href="{% static 'core/favicon.svg' %}">
   <title>{% block title %}Sovaro · Social strategy workspace{% endblock %}</title>
   <script>(function(){try{var t=localStorage.getItem('sovaro-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;document.querySelector('meta[name="theme-color"]').content=t==='dark'?'#0d1324':'#f6f8fc'}catch(e){}})();</script>
   <link rel="stylesheet" href="{% static 'core/app.css' %}">
+  {% if request.resolver_match.url_name == 'brand_create' %}<link rel="stylesheet" href="{% static 'core/competitor-discovery.css' %}">{% endif %}
   <link rel="stylesheet" href="{% static 'core/progress.css' %}">
   <script src="{% static 'core/progress.js' %}" defer></script>
   <script src="{% static 'core/theme.js' %}" defer></script>
@@ -29,7 +31,7 @@
         <a href="{% url 'web:brand_create' %}" {% if request.resolver_match.url_name == 'brand_create' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">＋</span> Add brand</a>
         <a href="{% url 'web:brand_scan' %}" {% if request.resolver_match.url_name == 'brand_scan' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⌕</span> Scan website</a>
         <a href="{% url 'web:caption_analyzer' %}" {% if request.resolver_match.url_name == 'caption_analyzer' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◎</span> Caption coach <small class="nav-soon">Soon</small></a>
-        <a href="{% url 'web:profile_optimizer' %}" {% if request.resolver_match.url_name == 'profile_optimizer' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◇</span> Profile optimizer</a>
+        <a href="{% url 'web:profile_optimizer' %}" {% if request.resolver_match.url_name == 'profile_optimizer' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◇</span> Profile audit</a>
         <a href="{% url 'web:account_settings' %}" {% if request.resolver_match.url_name == 'account_settings' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span> Settings</a>
       </nav>
     </div>

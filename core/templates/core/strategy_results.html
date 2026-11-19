@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Post results · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-intro split"><div><p class="eyebrow">RESULTS AND LEARNING</p><h1>Teach Sovaro what happened</h1><p>Connect real post results to the next strategy. Empty metrics are fine; record only what you actually know.</p></div><a class="button secondary" href="{% url 'web:strategy_detail' strategy.pk %}">Back to strategy</a></section>
+
+<section class="results-layout">
+  <div class="form-card"><h2>Record a post result</h2><p class="muted">A lesson becomes confirmed Brand Memory only when you write it here.</p><form method="post" class="stack">{% csrf_token %}{{ form.plan_key }}{% if form.non_field_errors %}<div class="form-alert">{{ form.non_field_errors }}</div>{% endif %}<div class="results-form-grid">{% for field in form %}{% if field.name != 'plan_key' %}<div class="{% if field.name == 'observation' or field.name == 'lesson' %}full-field{% endif %}">{{ field.label_tag }}{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}{% if field.errors %}<div class="field-error">{{ field.errors|striptags }}</div>{% endif %}</div>{% endif %}{% endfor %}</div><button type="submit">Save result and lesson</button></form></div>
+  <aside class="results-history"><h2>Recorded results</h2>{% for result in results %}<article><div><span>{{ result.platform|default:"Platform not set" }}</span><small>{{ result.published_on|default:result.created_at|date:"j M Y" }}</small></div><h3>{{ result.title }}</h3><p>{{ result.observation|default:"No written observation." }}</p>{% if result.lesson %}<strong>Lesson: {{ result.lesson }}</strong>{% endif %}<footer>{{ result.get_next_action_display }} · {{ result.enquiries }} enquiries · {{ result.link_clicks }} clicks</footer></article>{% empty %}<div class="empty"><h3>No results yet</h3><p>Publish a week-one post, then return to record what happened.</p></div>{% endfor %}</aside>
+</section>
+{% endblock %}

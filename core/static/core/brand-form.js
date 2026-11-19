@@ -100,4 +100,78 @@
       }
     });
   }
+
+  const competitorButton = form.querySelector('[data-competitor-suggest]');
+  const competitorStatus = form.querySelector('[data-competitor-status]');
+  const competitorList = form.querySelector('[data-competitor-list]');
+  const competitorField = form.querySelector('#id_competitor_notes');
+  if (competitorButton && competitorStatus && competitorList && competitorField) {
+    competitorButton.addEventListener('click', async () => {
+      const industryField = form.querySelector('#id_niche');
+      if (!industryField?.value.trim()) {
+        competitorStatus.textContent = 'Add the industry first.';
+        competitorStatus.className = 'competitor-suggestion-status is-error';
+        industryField?.focus();
+        return;
+      }
+      const originalText = competitorButton.innerHTML;
+      competitorButton.disabled = true;
+      competitorButton.setAttribute('aria-busy', 'true');
+      competitorButton.innerHTML = '<span class="button-spinner" aria-hidden="true"></span> Searching...';
+      competitorStatus.textContent = 'Checking current public social activity. This may take a moment.';
+      competitorStatus.className = 'competitor-suggestion-status is-working';
+      competitorList.replaceChildren();
+      try {
+        const response = await fetch(form.dataset.competitorUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': form.querySelector('[name="csrfmiddlewaretoken"]').value },
+          body: JSON.stringify({
+            brand_name: form.querySelector('#id_name')?.value || '',
+            industry: industryField.value,
+            audience: form.querySelector('#id_target_audience')?.value || '',
+            location: '',
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Competitor search could not be completed.');
+        const competitors = data.competitors || [];
+        if (!competitors.length) {
+          competitorStatus.textContent = 'No competitors met the two-platform activity rule. Add known competitors manually if needed.';
+          competitorStatus.className = 'competitor-suggestion-status is-empty';
+          return;
+        }
+        competitors.forEach((competitor) => {
+          const card = document.createElement('article');
+          const platforms = (competitor.platforms || []).map((item) => item.platform).join(' + ');
+          const links = (competitor.platforms || []).map((item) => item.url).join(' | ');
+          const line = `${competitor.name} | ${platforms} | ${links}`;
+          card.innerHTML = `<div><strong>${escapeHtml(competitor.name)}</strong><span>${escapeHtml(competitor.relationship || 'Competitor')}</span></div><p>${escapeHtml(competitor.why_relevant || '')}</p><small>${escapeHtml(platforms)} - recent public activity found</small><button type="button" class="button secondary">Add competitor</button>`;
+          card.querySelector('button').addEventListener('click', () => {
+            const existing = competitorField.value.trim();
+            if (!existing.includes(competitor.name)) competitorField.value = existing ? `${existing}\n${line}` : line;
+            competitorField.dispatchEvent(new Event('input', { bubbles: true }));
+            card.classList.add('is-added');
+            card.querySelector('button').textContent = 'Added';
+            card.querySelector('button').disabled = true;
+          });
+          competitorList.appendChild(card);
+        });
+        competitorStatus.textContent = `${competitors.length} active competitor${competitors.length === 1 ? '' : 's'} found. Choose the relevant ones.`;
+        competitorStatus.className = 'competitor-suggestion-status is-success';
+      } catch (error) {
+        competitorStatus.textContent = error.message;
+        competitorStatus.className = 'competitor-suggestion-status is-error';
+      } finally {
+        competitorButton.disabled = false;
+        competitorButton.removeAttribute('aria-busy');
+        competitorButton.innerHTML = originalText;
+      }
+    });
+  }
+
+  function escapeHtml(value) {
+    const node = document.createElement('div');
+    node.textContent = value || '';
+    return node.innerHTML;
+  }
 })();

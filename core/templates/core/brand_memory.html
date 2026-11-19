@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Brand memory · {{ brand.name }}{% endblock %}
 {% block content %}
-<section class="page-intro split"><div><p class="eyebrow">{{ brand.name|upper }} · INTELLIGENCE</p><h1>What Sovaro should remember</h1><p>Store verified facts, audience language, guardrails and performance lessons. Only confirmed memories influence AI-generated work.</p></div><span class="pill">{{ confirmed_count }} confirmed</span></section>
+<section class="page-intro split"><div><p class="eyebrow">{{ brand.name|upper }} · INTELLIGENCE</p><h1>Extra details for Sovaro</h1><p>Your name, goal, audience, voice and posting capacity already live in the <a href="{% url 'web:brand_profile' brand.pk %}">brand profile</a>. Add customer language, guardrails or lessons here only when they provide new information.</p></div><span class="pill">{{ confirmed_count }} approved extras</span></section>
 
 <div class="memory-layout">
   <section class="form-card memory-form-card">
@@ -15,7 +15,7 @@
   </section>
 
   <section class="memory-library">
-    <div class="memory-explainer"><strong>Confirmed means usable.</strong><p>Working hypotheses and items needing confirmation stay visible, but Sovaro will not present them as brand facts.</p></div>
+    <div class="memory-explainer"><strong>Approved for use, not independently verified.</strong><p>Confirmed extras can inform future plans. Working hypotheses and items needing confirmation stay labelled as such.</p></div>
     {% if memories %}<div class="memory-list">{% for memory in memories %}
       <article class="memory-card">
         <div class="memory-card-head"><span>{{ memory.get_category_display }}</span><span class="memory-status {{ memory.status }}">{{ memory.get_status_display }}</span></div>

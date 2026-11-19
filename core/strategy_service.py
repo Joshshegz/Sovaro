@@ -38,7 +38,7 @@ def build_foundation(brand, platforms):
     elif target and deadline:
         goal = f"Reach {target} {metric_text} by {deadline}."
     else:
-        goal = f"Measure {metric} for 30 days, then set a realistic 90-day target."
+        goal = (brand.primary_goal or "").strip() or f"Measure {metric} for 30 days, then set a realistic 90-day target."
     today = timezone.localdate()
     if stage == "new":
         audit = "This is a new brand with no posts to review. Use the first 30 days to establish a starting point."

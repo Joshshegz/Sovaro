@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
 
-from .models import BrandMemory, BrandProfile, MonthlyReport
+from .models import BrandMemory, BrandProfile, MonthlyReport, PostResult
 
 
 REPORT_METRICS = (
@@ -52,6 +52,43 @@ class ReportReviewForm(forms.ModelForm):
             raise forms.ValidationError("Complete the summary, learning, and next-month plan before marking the report ready.")
         if cleaned.get("status") == "ready" and ("Hypothesis to check:" in cleaned.get("what_worked", "") or "Add a post example" in cleaned.get("what_worked", "") or cleaned.get("next_month_plan", "").startswith("Choose one theme")):
             raise forms.ValidationError("Replace the draft prompts with your own learning and concrete next-month plan before marking the report ready.")
+        return cleaned
+
+
+class PostResultForm(forms.ModelForm):
+    class Meta:
+        model = PostResult
+        fields = (
+            "plan_key", "title", "platform", "published_on", "reach", "views",
+            "saves", "shares", "comments", "link_clicks", "enquiries", "sales",
+            "observation", "lesson", "next_action",
+        )
+        widgets = {
+            "plan_key": forms.HiddenInput(),
+            "published_on": forms.DateInput(attrs={"type": "date"}),
+            "observation": forms.Textarea(attrs={"rows": 3, "placeholder": "What happened? State only what the numbers or responses show."}),
+            "lesson": forms.Textarea(attrs={"rows": 3, "placeholder": "What should the next post do differently?"}),
+        }
+        labels = {
+            "title": "Post or content title",
+            "published_on": "Date published",
+            "reach": "Reach",
+            "views": "Views",
+            "link_clicks": "Link clicks",
+            "enquiries": "Qualified enquiries",
+            "sales": "Sales attributed",
+            "observation": "What did you observe?",
+            "lesson": "What did you learn?",
+            "next_action": "What should happen next?",
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        metrics = ("reach", "views", "saves", "shares", "comments", "link_clicks", "enquiries", "sales")
+        if not any(cleaned.get(metric) for metric in metrics) and not (cleaned.get("observation") or "").strip():
+            raise forms.ValidationError("Add at least one result or a clear observation from the post.")
+        if cleaned.get("next_action") != "insufficient" and not (cleaned.get("lesson") or "").strip():
+            self.add_error("lesson", "Add the evidence-based lesson behind this decision.")
         return cleaned
 
 
@@ -172,18 +209,27 @@ class BrandForm(forms.ModelForm):
         help_text="Use two or three words, such as: witty, honest and encouraging.",
         widget=forms.Textarea(attrs={"rows": 2, "placeholder": "For example: witty, honest and encouraging"}),
     )
+    competitor_notes = forms.CharField(
+        required=False,
+        label="Active competitors",
+        help_text="Optional. Add competitors you know, or ask Sovaro to find brands with recent activity on at least two social platforms.",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "One competitor per line, with profile links when possible"}),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         placeholders = {
             "name": "For example: Ada's Cakes",
-            "niche": "For example: Lagos bakery or fitness coaching",
-            "target_audience": "Describe who is most likely to buy, what they need, and what gets in their way.",
+            "niche": "For example: Technology, Logistics, E-commerce or Skincare",
+            "target_audience": "For example: Lagos founders building their first online business",
             "negative_guardrails": "Claims, topics or promises the brand should avoid",
         }
         for name, placeholder in placeholders.items():
             self.fields[name].widget.attrs["placeholder"] = placeholder
         self.fields["name"].widget.attrs["autofocus"] = True
+        self.fields["niche"].label = "Industry"
+        self.fields["niche"].help_text = "Use a short category, usually one to three words. Describe the business elsewhere."
+        self.fields["target_audience"].help_text = "Keep this short: who they are, plus location or life stage when relevant. Needs and barriers are captured in the strategy brief."
 
     def clean(self):
         cleaned_data = super().clean()
@@ -200,7 +246,7 @@ class BrandForm(forms.ModelForm):
         fields = (
             "name", "niche", "business_model", "primary_goal",
             "weekly_posts_capacity", "conversion_url", "target_audience",
-            "tone_of_voice", "custom_tone", "negative_guardrails",
+            "tone_of_voice", "custom_tone", "negative_guardrails", "competitor_notes",
         )
         widgets = {
             "target_audience": forms.Textarea(attrs={"rows": 4}),
@@ -209,7 +255,7 @@ class BrandForm(forms.ModelForm):
         }
         labels = {
             "name": "Brand or business name",
-            "niche": "Industry or market",
+            "niche": "Industry",
             "business_model": "How does your business make money?",
             "primary_goal": "Main business goal",
             "weekly_posts_capacity": "How many times can you realistically post each week?",
@@ -219,7 +265,7 @@ class BrandForm(forms.ModelForm):
             "negative_guardrails": "Topics or claims to avoid",
         }
         help_texts = {
-            "niche": "For example: local bakery, fitness coaching, or business software.",
+            "niche": "Use a short category such as Technology, Logistics, E-commerce, Education, or Skincare.",
             "business_model": "For example: online shop, local service, or subscription product.",
             "conversion_url": "A website, shop, booking page, or contact link. Optional.",
             "target_audience": "Describe the people most likely to buy from you and what they need.",
@@ -240,6 +286,14 @@ class BrandProfileForm(forms.ModelForm):
         if image and image.size > 3 * 1024 * 1024:
             raise forms.ValidationError("Choose an image smaller than 3 MB.")
         return image
+
+
+class BrandDetailsForm(forms.ModelForm):
+    class Meta:
+        model = BrandProfile
+        fields = ("name", "niche", "primary_goal", "target_audience", "tone_of_voice", "weekly_posts_capacity", "conversion_url", "negative_guardrails")
+        labels = {"name": "Brand name", "niche": "Industry", "primary_goal": "Business goal", "target_audience": "Audience", "tone_of_voice": "Brand voice", "weekly_posts_capacity": "Posts per week in total", "conversion_url": "Where interested people go", "negative_guardrails": "Claims or topics to avoid"}
+        widgets = {"target_audience": forms.Textarea(attrs={"rows": 2}), "negative_guardrails": forms.Textarea(attrs={"rows": 2})}
 
 
 class BrandMemoryForm(forms.ModelForm):
@@ -322,7 +376,7 @@ class StrategyBriefForm(forms.Form):
         help_text="Add real reviews, results, records, demonstrations, credentials, or customer stories you have permission to share.",
         widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Leave blank if no proof is ready yet"}),
     )
-    goal_metric = forms.CharField(label="What result matters most?", help_text="Choose one number, such as website clicks, enquiries, sales, or engagement rate.")
+    goal_metric = forms.CharField(required=False, label="How will you measure progress?", help_text="Optional if your business goal already names the result, such as enquiries or sales.")
     baseline = forms.DecimalField(required=False, min_value=0, label="Current result", help_text="Leave blank if you have not measured it yet.")
     target = forms.DecimalField(required=False, min_value=0, label="Target result")
     deadline = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}), label="Target date")
@@ -441,18 +495,26 @@ class ProfileOptimizerForm(forms.Form):
     )
     saved_brand = forms.ChoiceField(required=False, choices=(("", "Start from scratch"),), label="Use a saved brand")
     platform = forms.ChoiceField(choices=PLATFORM_CHOICES, label="Platform")
+    profile_reference = forms.CharField(
+        required=False, max_length=300, label="Profile username or URL",
+        widget=forms.TextInput(attrs={"placeholder": "Optional - for example: @yourbrand"}),
+        help_text="Used as context only. Sovaro does not claim to inspect the live profile.",
+    )
     business_name = forms.CharField(max_length=120, label="Business or creator name", widget=forms.TextInput(attrs={"placeholder": "For example: Dovee"}))
     industry = forms.CharField(max_length=180, label="What industry or category are you in?", widget=forms.TextInput(attrs={"placeholder": "For example: creator marketplace or Lagos bakery"}))
     audience = forms.CharField(max_length=300, label="Who do you want to attract?", widget=forms.TextInput(attrs={"placeholder": "Describe the customers, clients, followers or partners you want"}))
     current_name = forms.CharField(required=False, max_length=120, label="Current profile name", widget=forms.TextInput(attrs={"placeholder": "Optional—leave blank if the profile is new"}))
     current_bio = forms.CharField(required=False, label="Current bio or About text", widget=forms.Textarea(attrs={"rows": 6, "placeholder": "Paste the current bio—or leave this blank to create one from scratch."}), help_text="Optional. Leave blank if the profile is new or has no bio yet.")
+    profile_category = forms.CharField(required=False, max_length=120, label="Current profile category", widget=forms.TextInput(attrs={"placeholder": "Optional - for example: Beauty, Consultant, Software"}))
     destination = forms.CharField(required=False, max_length=300, label="Where should visitors go next?", widget=forms.TextInput(attrs={"placeholder": "Website, booking page, shop, newsletter or DMs"}))
     profile_goal = forms.ChoiceField(choices=GOAL_CHOICES, label="What should this profile achieve?")
     offer = forms.CharField(max_length=300, label="What do you offer?", widget=forms.TextInput(attrs={"placeholder": "The product, service or transformation people can get"}))
     differentiator = forms.CharField(required=False, max_length=300, label="Why should someone choose this brand?", widget=forms.TextInput(attrs={"placeholder": "A specific approach, advantage or point of view"}))
     service_area = forms.CharField(required=False, max_length=180, label="Where do you serve?", widget=forms.TextInput(attrs={"placeholder": "For example: Lagos, worldwide, or remote"}))
     proof_points = forms.CharField(required=False, max_length=400, label="What can build trust?", widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Optional: verified experience, credentials, customer type or genuine proof"}))
-    desired_cta = forms.CharField(max_length=180, label="What should a visitor do next?", widget=forms.TextInput(attrs={"placeholder": "For example: book a consultation or shop the collection"}))
+    brand_voice = forms.CharField(required=False, max_length=255, label="How should this sound?", widget=forms.TextInput(attrs={"placeholder": "For example: clear and reassuring"}))
+    claims_to_avoid = forms.CharField(required=False, label="Claims or topics to avoid", widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Optional: promises the brand cannot make"}))
+    desired_cta = forms.CharField(max_length=180, label="What should a visitor do next?", help_text="Sovaro suggests one action from your goal. Edit it to match how people can actually contact or buy from you.", widget=forms.TextInput(attrs={"placeholder": "For example: ask about booking or explore the offer"}))
 
     def __init__(self, *args, brands=None, **kwargs):
         super().__init__(*args, **kwargs)

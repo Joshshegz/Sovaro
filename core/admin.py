@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import BrandMemory, BrandProfile, Competitor, SocialPost, GeneratedIdea, MonthlyReport
+from .models import BrandMemory, BrandProfile, Competitor, SocialPost, GeneratedIdea, MonthlyReport, PostResult
 
 
 @admin.register(BrandProfile)
@@ -13,6 +13,13 @@ class BrandMemoryAdmin(admin.ModelAdmin):
     list_display = ('brand', 'category', 'status', 'updated_at')
     list_filter = ('category', 'status', 'is_active')
     search_fields = ('brand__name', 'statement', 'evidence')
+
+
+@admin.register(PostResult)
+class PostResultAdmin(admin.ModelAdmin):
+    list_display = ('title', 'brand', 'platform', 'published_on', 'next_action')
+    list_filter = ('platform', 'next_action')
+    search_fields = ('title', 'brand__name', 'lesson', 'observation')
 
 
 @admin.register(Competitor)
